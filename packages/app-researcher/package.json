@@ -1,0 +1,22 @@
+{
+  "name": "@motion-mcp/app-researcher",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@motion-mcp/asset-indexer": "workspace:*",
+    "@motion-mcp/codebase-scanner": "workspace:*",
+    "@motion-mcp/shared-types": "workspace:*"
+  }
+}

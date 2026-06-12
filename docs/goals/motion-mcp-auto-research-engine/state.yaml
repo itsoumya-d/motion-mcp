@@ -1,0 +1,402 @@
+version: 2
+
+goal:
+  title: "Motion MCP Auto-Research Engine"
+  slug: "motion-mcp-auto-research-engine"
+  kind: existing_plan
+  tranche: "Create a local, mockable auto-research/context-engineering MCP workflow that produces source-backed research, ranked implementation opportunities, and at least one verified repo improvement."
+  status: done
+  oracle:
+    signal: "A local/mockable MCP research workflow returns source-backed research plus ranked implementation opportunities, and at least one implemented repo improvement is verified by tests/typechecks/smoke checks."
+    cadence: "after each Worker package and at final audit"
+    final_proof: "Done Worker receipts include changed files and passing verification; final Judge receipt maps the working MCP workflow and verified improvement back to the original user outcome with full_outcome_complete: true."
+  intake:
+    original_request: "Use GitHub/auto research and Andrew Karpathy-style context engineering to make this plugin the best in its category across mobile games, apps, Unity, Flutter, and all platforms."
+    interpreted_outcome: "Motion MCP gains a repo-native auto-research workflow that studies source-backed best practices/open-source patterns, turns them into ranked implementation opportunities, and drives verified improvements."
+    input_shape: existing_plan
+    audience: "Motion MCP users building polished apps, mobile apps, games, and cross-platform motion/state-machine experiences."
+    authority: approved
+    proof_type: test
+    completion_proof: "A working MCP workflow produces source-backed research, ranked implementation opportunities, and at least one verified local repo improvement."
+    likely_misfire: "Producing a big research document or roadmap without a usable MCP workflow and without a verified implementation improvement."
+    blind_spots_considered:
+      - "Best-in-category could sprawl into hosted crawling, billing, emitters, demos, UI, and platform rewrites."
+      - "Research must be source-backed and should not become one giant prompt dump."
+      - "First tranche must stay local, mockable, and reviewable."
+    existing_plan_facts:
+      - "Create a fresh GoalBuddy board at docs/goals/motion-mcp-auto-research-engine/."
+      - "Use the local live board by default."
+      - "First tranche focus is the Research Engine."
+      - "No paid/hosted backend in tranche one."
+      - "Karpathy-style context engineering means curating the right code, docs, examples, constraints, and verification context per agent step."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  goal_pressure_requires_oracle: true
+  no_completion_on_weak_proof: true
+  slice_policy:
+    max_consecutive_tiny_tasks: 2
+    prefer_vertical_slices: true
+    judge_picks_largest_safe_slice: true
+    worker_completes_whole_slice: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+visual_board:
+  selected: local
+  local:
+    status: live
+    url: "http://goalbuddy.localhost:41737/motion-mcp-auto-research-engine/"
+    command: "npx goalbuddy board docs/goals/motion-mcp-auto-research-engine"
+
+active_task: null
+
+tasks:
+  - id: T001
+    type: scout
+    assignee: Scout
+    status: done
+    reasoning_hint: medium
+    objective: "Map current Motion MCP research/state-machine/SVG/tool architecture and identify where an auto-research workflow should plug in."
+    inputs:
+      - "README.md"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "packages/*/package.json"
+      - "packages/*/src"
+      - "apps/web"
+      - "tests"
+      - "skills/motion-mcp/SKILL.md"
+    constraints:
+      - "Read-only."
+      - "Do not edit implementation files."
+      - "Prefer concrete file-path evidence over generic advice."
+      - "Preserve the user-provided first-tranche constraints."
+    expected_output:
+      - "Architecture map of current app research, state-machine research, SVG lanes, Quiver provider, emitters, MCP server, docs, and tests."
+      - "Existing verification commands and their likely runtime prerequisites."
+      - "Candidate integration points for auto-research/context-engineering."
+      - "Risks, missing abstractions, and candidate next tasks."
+    receipt:
+      result: done
+      completed_at: "2026-06-10T00:00:00.000Z"
+      summary: "Current Motion MCP already has a strong local pipeline: codebase/assets/concept scanning, app-motion research, page-level Rive-like state-machine research, two SVG lanes, Quiver provider, credit ledger, emitters, MCP tools, HTTP bridge, docs, and tests. There is no dedicated auto-research/source-backed opportunity package yet."
+      evidence:
+        - "Read packages/mcp-server/src/index.ts tool registrations and HTTP bridge mappings."
+        - "Read packages/app-researcher/src/index.ts, packages/state-machine-researcher/src/index.ts, packages/motion-planner/src/index.ts, packages/quiver-provider/src/index.ts, and packages/credits-ledger/src/index.ts."
+        - "Searched packages, tests, README.md, and skills/motion-mcp/SKILL.md for source-backed research, context-pack, and auto-research terms."
+      architecture_map:
+        - "packages/mcp-server/src/index.ts is the primary integration seam; it registers app research, state-machine research, SVG lane, Quiver, credits, generation, preview, apply, and HTTP bridge handlers."
+        - "packages/app-researcher/src/index.ts builds .motion-mcp/app-context.json and motion-map.json from scans, flows, screens, design tokens, motion thesis, lane decisions, view models, and state-machine needs."
+        - "packages/state-machine-researcher/src/index.ts builds .motion-mcp/state-machine-experience.json with Rive-like pages, layers, states, transitions, listeners, bindings, and codegen readiness."
+        - "packages/motion-planner/src/index.ts ranks existing component/asset microinteraction opportunities but does not normalize external research sources or build agent context packs."
+        - "packages/quiver-provider/src/index.ts is local/mockable by default and already supports live/fallback model pricing, SVG generation/vectorization, and Quiver error mapping."
+        - "packages/credits-ledger/src/index.ts provides local JSON credits, reservations, commits, refunds, and purchase URL fallback."
+        - "packages/emitter-* implement framework-native animation output; React/Expo are the stable first targets and Flutter/Unity remain beta-like surfaces."
+        - "README.md and skills/motion-mcp/SKILL.md document the current scan/research/plan/generate/preview/apply workflow."
+      verification_prereqs:
+        - "Root scripts expect pnpm, but local verification can use /opt/homebrew/bin/node with tsx and TypeScript directly if pnpm is unavailable."
+        - "Existing relevant test command: /opt/homebrew/bin/node --test --import tsx tests/*.test.ts"
+        - "Existing relevant typecheck pattern: /opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/<pkg>/tsconfig.json --noEmit"
+      integration_points:
+        - "Add a package such as @motion-mcp/auto-researcher that consumes scan/app/state-machine context and emits .motion-mcp/auto-research.json."
+        - "Extend shared types with source normalization, source-backed findings, ranked opportunities, and context packs."
+        - "Add an MCP tool and HTTP bridge handler in packages/mcp-server/src/index.ts."
+        - "Add docs/skill workflow entries so agents know to run auto research before selecting implementation slices."
+        - "Add unit/integration tests beside existing app/state-machine/quiver tests."
+      risks:
+        - "Avoid a static research report with no tool behavior."
+        - "Keep tranche one local and mockable; no hosted crawlers, paid APIs, Supabase, Stripe, or credentials."
+        - "Use external web/source evidence during Scout, but runtime package should not depend on network."
+
+  - id: T002
+    type: scout
+    assignee: Scout
+    status: done
+    reasoning_hint: high
+    objective: "Research source-backed category leaders and open-source patterns for Rive/Lottie alternatives, codebase-aware animation, game/app UI motion, Unity, Flutter, Expo, React, and agent context engineering."
+    inputs:
+      - "T001 receipt"
+      - "Public primary docs and open-source repositories relevant to Rive/Lottie-style motion, React/Expo/Flutter/Unity animation, game UI motion, and context engineering."
+    constraints:
+      - "Read-only."
+      - "Use source-backed evidence with URLs or repo references."
+      - "Prioritize open-source and primary documentation."
+      - "Do not create assets, code, or implementation files."
+      - "Do not require paid/hosted backend or non-mockable paid APIs for tranche-one recommendations."
+    expected_output:
+      - "Source-backed findings grouped by category."
+      - "Best-in-category gaps Motion MCP can realistically close locally."
+      - "Research source normalization needs."
+      - "Opportunity ranking criteria for implementation."
+      - "Candidate context-pack shape for agents."
+    receipt:
+      result: done
+      completed_at: "2026-06-10T00:00:00.000Z"
+      note: "docs/goals/motion-mcp-auto-research-engine/notes/T002-source-backed-research.md"
+      summary: "Source research shows Motion MCP's best local wedge is not a new animation runtime. It is a codebase-aware research/context engine that preserves Rive-like state-machine and ViewModel concepts, learns from Lottie/runtime/platform patterns, ranks screen-level motion opportunities, and emits source-backed context packs for AI coding agents."
+      evidence:
+        - "Rive docs/repositories: state-machine graph, states, transitions, layers, data binding/ViewModels, runtime APIs."
+        - "Lottie and runtime references: lottie-web, Lottie implementations."
+        - "Framework references: Motion for React, GSAP, Reanimated, react-native-svg, Flutter animations, Unity Animator/UI Toolkit, DOTween."
+        - "Product/accessibility/context references: Material motion, Apple HIG motion/accessibility, Karpathy context-engineering framing, LangChain context-engineering strategies."
+        - "QuiverAI docs: generation endpoint, live pricing_credits, rate limits, model choice."
+      recommended_slice: "Implement a local @motion-mcp/auto-researcher package, shared source/opportunity/context-pack types, MCP tool/HTTP bridge, docs, and tests."
+
+  - id: T003
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Convert Scout findings into the first safe implementation tranche for a local auto-research MCP workflow."
+    inputs:
+      - "T001 receipt"
+      - "T002 receipt"
+    constraints:
+      - "Do not implement."
+      - "Choose the largest safe useful local slice with clear allowed_files, verification commands, and stop conditions."
+      - "Reject plans that only produce a research report without working MCP behavior."
+      - "Keep tranche one local, mockable, and reviewable."
+    expected_output:
+      - "Decision: approved | blocked | needs_more_scouting."
+      - "Exact Worker objective for T004."
+      - "allowed_files for T004."
+      - "verify commands for T004."
+      - "stop_if conditions for T004."
+      - "Deferred or blocked tasks."
+    receipt:
+      result: done
+      completed_at: "2026-06-10T00:00:00.000Z"
+      decision: approved
+      summary: "Approved the largest safe local slice: a new auto-researcher package plus shared types, MCP/HTTP wiring, and docs. This directly addresses the oracle by making source-backed research executable as a local MCP workflow instead of a static report."
+      rationale:
+        - "T001 found no existing auto-research/context-pack package and identified mcp-server as the primary integration seam."
+        - "T002 found the best category wedge: Rive-like contracts plus source-backed context packs for AI coding agents."
+        - "The slice is local/mockable and avoids hosted crawling, paid APIs, credentials, Supabase, Stripe, and production infrastructure."
+      t004_objective: "Implement @motion-mcp/auto-researcher with a curated source catalog, source-backed findings, ranked local opportunities, context-pack output, .motion-mcp/auto-research.json persistence, and an MCP/HTTP tool named auto_research_motion."
+      t004_allowed_files:
+        - "packages/auto-researcher/package.json"
+        - "packages/auto-researcher/tsconfig.json"
+        - "packages/auto-researcher/src/index.ts"
+        - "packages/shared-types/src/index.ts"
+        - "packages/mcp-server/package.json"
+        - "packages/mcp-server/src/index.ts"
+        - "packages/shared-types/dist/**"
+        - "packages/auto-researcher/dist/**"
+        - "pnpm-lock.yaml"
+        - "README.md"
+        - "skills/motion-mcp/SKILL.md"
+      t004_verify:
+        - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/shared-types/tsconfig.json --noEmit"
+        - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/auto-researcher/tsconfig.json --noEmit"
+        - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/mcp-server/tsconfig.json --noEmit"
+      t005_objective: "Add tests and smoke checks proving source normalization, opportunity ranking, context-pack construction, JSON persistence, and local MCP/HTTP behavior."
+      t005_allowed_files:
+        - "tests/auto-researcher.test.ts"
+        - "tests/*.test.ts"
+        - "packages/auto-researcher/src/index.ts"
+        - "packages/shared-types/src/index.ts"
+        - "packages/mcp-server/src/index.ts"
+        - "packages/mcp-server/dist/**"
+      t005_verify:
+        - "/opt/homebrew/bin/node --test --import tsx tests/*.test.ts"
+        - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/auto-researcher/tsconfig.json --noEmit"
+        - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/mcp-server/tsconfig.json --noEmit"
+      stop_if:
+        - "Need network or live GitHub/API calls at runtime."
+        - "Need production credentials or paid hosted backend."
+        - "Need to alter app emitters beyond type-compatible integration."
+
+  - id: T004
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Implement @motion-mcp/auto-researcher with a curated source catalog, source-backed findings, ranked local opportunities, context-pack output, .motion-mcp/auto-research.json persistence, and an MCP/HTTP tool named auto_research_motion."
+    allowed_files:
+      - "packages/auto-researcher/package.json"
+      - "packages/auto-researcher/tsconfig.json"
+      - "packages/auto-researcher/src/index.ts"
+      - "packages/shared-types/src/index.ts"
+      - "packages/mcp-server/package.json"
+      - "packages/mcp-server/src/index.ts"
+      - "packages/shared-types/dist/**"
+      - "packages/auto-researcher/dist/**"
+      - "pnpm-lock.yaml"
+      - "README.md"
+      - "skills/motion-mcp/SKILL.md"
+    verify:
+      - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/shared-types/tsconfig.json --noEmit"
+      - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/auto-researcher/tsconfig.json --noEmit"
+      - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/mcp-server/tsconfig.json --noEmit"
+    stop_if:
+      - "Need files outside allowed_files."
+      - "Need paid/hosted backend, production credentials, or non-mockable paid APIs."
+      - "Behavior is ambiguous after reading T003."
+      - "Verification fails twice for the same reason."
+    receipt:
+      result: done
+      completed_at: "2026-06-10T00:00:00.000Z"
+      summary: "Implemented the local auto-research workflow. Added @motion-mcp/auto-researcher, shared source/finding/opportunity/context-pack types, stdio and HTTP MCP wiring for auto_research_motion, docs/skill workflow updates, workspace lock/link refresh, and generated type surfaces."
+      changed_files:
+        - "packages/auto-researcher/package.json"
+        - "packages/auto-researcher/tsconfig.json"
+        - "packages/auto-researcher/src/index.ts"
+        - "packages/auto-researcher/dist/index.js"
+        - "packages/auto-researcher/dist/index.d.ts"
+        - "packages/shared-types/src/index.ts"
+        - "packages/shared-types/dist/index.js"
+        - "packages/shared-types/dist/index.d.ts"
+        - "packages/mcp-server/package.json"
+        - "packages/mcp-server/src/index.ts"
+        - "pnpm-lock.yaml"
+        - "README.md"
+        - "skills/motion-mcp/SKILL.md"
+      behavior:
+        - "auto_research_motion runs scan -> app motion research -> state-machine experience -> source-backed findings -> ranked opportunities -> context packs."
+        - "Runtime research is local/mockable and uses a curated source catalog plus optional caller-provided sources."
+        - "Results persist to .motion-mcp/auto-research.json."
+      commands:
+        - cmd: "pnpm install --lockfile-only=false"
+          status: pass
+        - cmd: "pnpm --filter @motion-mcp/shared-types build"
+          status: pass
+        - cmd: "pnpm --filter @motion-mcp/auto-researcher build"
+          status: pass
+        - cmd: "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/shared-types/tsconfig.json --noEmit"
+          status: pass
+        - cmd: "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/auto-researcher/tsconfig.json --noEmit"
+          status: pass
+        - cmd: "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/mcp-server/tsconfig.json --noEmit"
+          status: pass
+      verification:
+        result: passed
+        commands:
+          - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/shared-types/tsconfig.json --noEmit"
+          - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/auto-researcher/tsconfig.json --noEmit"
+          - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/mcp-server/tsconfig.json --noEmit"
+
+  - id: T005
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Add tests and smoke checks proving source normalization, opportunity ranking, context-pack construction, JSON persistence, and local MCP/HTTP behavior."
+    allowed_files:
+      - "tests/auto-researcher.test.ts"
+      - "tests/*.test.ts"
+      - "packages/auto-researcher/src/index.ts"
+      - "packages/shared-types/src/index.ts"
+      - "packages/mcp-server/src/index.ts"
+      - "packages/mcp-server/dist/**"
+    verify:
+      - "/opt/homebrew/bin/node --test --import tsx tests/*.test.ts"
+      - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/auto-researcher/tsconfig.json --noEmit"
+      - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/mcp-server/tsconfig.json --noEmit"
+    stop_if:
+      - "Need files outside allowed_files."
+      - "T004 is not done or did not define the implemented workflow."
+      - "Verification requires network, paid APIs, hosted backend, or unavailable credentials."
+      - "Verification fails twice for the same reason."
+    receipt:
+      result: done
+      completed_at: "2026-06-10T00:00:00.000Z"
+      summary: "Added verification for the auto-research workflow: source normalization/ranking unit coverage, end-to-end fixture persistence of .motion-mcp/auto-research.json, and HTTP bridge smoke coverage for auto_research_motion."
+      changed_files:
+        - "tests/auto-researcher.test.ts"
+        - "packages/mcp-server/dist/index.js"
+        - "packages/mcp-server/dist/index.d.ts"
+      commands:
+        - cmd: "/opt/homebrew/bin/node --test --import tsx tests/*.test.ts"
+          status: pass
+        - cmd: "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/auto-researcher/tsconfig.json --noEmit"
+          status: pass
+        - cmd: "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/mcp-server/tsconfig.json --noEmit"
+          status: pass
+        - cmd: "pnpm --filter @motion-mcp/server build"
+          status: pass
+      verification:
+        result: passed
+        commands:
+          - "/opt/homebrew/bin/node --test --import tsx tests/*.test.ts"
+          - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/auto-researcher/tsconfig.json --noEmit"
+          - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/mcp-server/tsconfig.json --noEmit"
+          - "pnpm --filter @motion-mcp/server build"
+        evidence:
+          - "14/14 node:test tests passed."
+          - "HTTP bridge test posted to /tool/auto_research_motion and received sources, opportunities, and context packs."
+          - "Server dist build completed for the plugin entrypoint."
+
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit whether the tranche proves the original outcome: a working auto-research MCP workflow plus verified repo improvement."
+    inputs:
+      - "All done task receipts"
+      - "Last verification"
+      - "Current dirty diff"
+      - "Goal oracle"
+    constraints:
+      - "Do not implement."
+      - "Reject completion if required Worker work is still queued or active."
+      - "Reject completion if the only output is planning, research notes, or a roadmap."
+      - "Reject completion if no verified repo improvement exists."
+      - "Reject completion if the MCP workflow cannot be run or smoke-tested locally/mockably."
+    expected_output:
+      - "complete | not_complete"
+      - "full_outcome_complete: true | false"
+      - "evidence mapped to the oracle"
+      - "missing evidence"
+      - "next task if not complete"
+    receipt:
+      result: done
+      completed_at: "2026-06-10T00:00:00.000Z"
+      decision: complete
+      full_outcome_complete: true
+      summary: "The tranche satisfies the oracle. Motion MCP now has a local/mockable source-backed auto-research MCP workflow that returns sources, findings, ranked implementation opportunities, and context packs, and the repo improvement is verified by tests, typechecks, server build, and an HTTP bridge smoke path."
+      evidence_mapped_to_oracle:
+        - "Working MCP workflow: auto_research_motion is registered in packages/mcp-server/src/index.ts and the HTTP bridge handler posts to /tool/auto_research_motion."
+        - "Source-backed research: @motion-mcp/auto-researcher ships a curated source catalog covering Rive, Lottie, Motion React, Reanimated, react-native-svg, Flutter, Unity, DOTween, Material/Apple motion, Karpathy/LangChain context engineering, and QuiverAI."
+        - "Ranked opportunities: autoResearchMotion builds scored MotionResearchOpportunity items from app motion context, state-machine experience, local files, framework support, source IDs, and verification strength."
+        - "Context packs: autoResearchMotion emits MotionResearchContextPack objects with selected files, source IDs, local evidence, constraints, tool sequence, and verification commands."
+        - "Local persistence: tests verify .motion-mcp/auto-research.json is written and readable."
+        - "Verified repo improvement: tests/auto-researcher.test.ts adds unit, integration, and HTTP smoke coverage."
+      verification:
+        result: passed
+        commands:
+          - "/opt/homebrew/bin/node --test --import tsx tests/*.test.ts"
+          - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/auto-researcher/tsconfig.json --noEmit"
+          - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/mcp-server/tsconfig.json --noEmit"
+          - "pnpm --filter @motion-mcp/server build"
+      residual_risk:
+        - "Runtime source catalog is curated/offline in tranche one; live GitHub crawling and continuous source refresh remain deferred."
+        - "Flutter and Unity remain beta targets as intended."
+      next_deferred_tasks:
+        - "Add optional source-pack refresh tooling with pinned snapshots."
+        - "Use auto_research_motion output to drive one real generated motion diff in an example app."
+
+checks:
+  dirty_fingerprint: unknown
+  last_verification:
+    result: passed
+    task: T005
+    commands:
+      - "/opt/homebrew/bin/node --test --import tsx tests/*.test.ts"
+      - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/auto-researcher/tsconfig.json --noEmit"
+      - "/opt/homebrew/bin/node node_modules/typescript/bin/tsc -p packages/mcp-server/tsconfig.json --noEmit"
+      - "pnpm --filter @motion-mcp/server build"

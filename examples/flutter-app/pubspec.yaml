@@ -1,0 +1,13 @@
+name: motion_mcp_flutter_example
+description: Example Flutter target for Motion MCP.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_svg: ^2.0.10
+  rive: ^0.13.20

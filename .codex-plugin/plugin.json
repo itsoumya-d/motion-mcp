@@ -1,0 +1,26 @@
+{
+  "name": "motion-mcp",
+  "version": "0.1.0",
+  "description": "AI-native codebase-aware motion generation for existing apps, websites, and games.",
+  "author": {
+    "name": "Motion MCP"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Motion MCP",
+    "shortDescription": "Add codebase-aware motion to existing apps.",
+    "longDescription": "Motion MCP researches an existing app flow, creates Rive-like page state-machine experience specs, chooses simple or premium SVG generation lanes, indexes generated assets, and emits framework-native state-machine animation code through MCP tools.",
+    "developerName": "Motion MCP",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "brandColor": "#5B7CFA",
+    "defaultPrompt": [
+      "Research this app for premium motion opportunities.",
+      "Create a Rive-like state-machine experience map for every page.",
+      "Decide whether this SVG should use the simple or premium lane.",
+      "Animate this SVG path-by-path.",
+      "Plan state-machine motion for this screen."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

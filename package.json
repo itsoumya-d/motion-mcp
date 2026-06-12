@@ -1,0 +1,20 @@
+{
+  "name": "motion-mcp-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI-native, codebase-aware motion generation MCP server.",
+  "scripts": {
+    "build": "pnpm -r --filter './packages/**' build",
+    "typecheck": "pnpm -r --filter './packages/**' typecheck",
+    "test": "node --test --import tsx tests/*.test.ts",
+    "dev:mcp": "tsx packages/mcp-server/src/index.ts",
+    "validate:plugin": "python3 /Users/soumyadebnath16/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py ."
+  },
+  "packageManager": "pnpm@9.15.0",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

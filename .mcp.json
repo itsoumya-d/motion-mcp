@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "motion-mcp": {
+      "command": "node",
+      "args": ["./packages/mcp-server/dist/index.js"],
+      "env": {
+        "MOTION_MCP_ROOT": "."
+      }
+    }
+  }
+}
