@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Web exercise studio demo: procedural character driven by motion-runtime with reactive overlays, plus anatomy-engine SVG mascots reacting to the same event stream.",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
