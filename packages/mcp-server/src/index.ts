@@ -65,6 +65,7 @@ import { researchStateMachineExperience } from "@motion-mcp/state-machine-resear
 import { compileExperienceToScene, type SceneDoc } from "@motion-mcp/scene-graph";
 import { importRiv, toSceneSkeleton } from "@motion-mcp/riv-importer";
 import { toAnimatedSvg, toLottie } from "@motion-mcp/exporters";
+import { captureSceneGif } from "@motion-mcp/capture";
 import type {
   PageStateMachineExperience,
   StateMachineExperienceResult
@@ -612,6 +613,27 @@ server.registerTool(
   async ({ rootPath, filePath }) => {
     const root = resolveRoot(rootPath);
     return jsonResult(await importRivAsset(root, filePath));
+  }
+);
+
+server.registerTool(
+  "capture_gif",
+  {
+    title: "Capture GIF",
+    description: "Render a SceneDoc state to an animated GIF (no browser — headless SVG rasterization via resvg). Requires research_state_machine_experience; installs @resvg/resvg-js on first use if missing.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      componentId: z.string(),
+      state: z.string().optional(),
+      fps: z.number().optional().describe("Frames per second, 1-60. Default 20."),
+      maxFrames: z.number().optional().describe("Safety cap. Default 120."),
+      width: z.number().optional()
+    }
+  },
+  async ({ rootPath, componentId, state, fps, maxFrames, width }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 5, reason: "capture_gif" });
+    return jsonResult(await captureGifAsset(root, { componentId, state, fps, maxFrames, width }));
   }
 );
 
@@ -1420,18 +1442,15 @@ interface ExportAnimationParams {
   fps?: number;
 }
 
-/**
- * Exports the compiled SceneDoc for an asset as portable artifacts:
- * Lottie JSON or a self-contained animated SVG.
- */
-async function exportAnimation(
+/** Shared loader: indexed SVG asset → SceneDoc artboard with sourceSvg attached. */
+async function loadSceneForAsset(
   root: string,
-  params: ExportAnimationParams
-): Promise<{ exportPath: string; format: string; bytes: number }> {
+  componentId: string
+): Promise<{ doc: SceneDoc; base: string }> {
   const assets = await loadOptionalJson<AssetIndexResult>(root, "assets.json");
-  const asset = assets?.assets.find((candidate) => candidate.id === params.componentId);
+  const asset = assets?.assets.find((candidate) => candidate.id === componentId);
   if (!asset || asset.type !== "svg") {
-    throw new Error(`No indexed SVG asset found for ${params.componentId}. Run scan_assets or generate an asset first.`);
+    throw new Error(`No indexed SVG asset found for ${componentId}. Run scan_assets or generate an asset first.`);
   }
 
   let svgSource: string;
@@ -1454,9 +1473,9 @@ async function exportAnimation(
     estimatedCredits: 0,
     complexity: "low"
   };
-  const artboard = await sceneForPlanItem(root, planItem, params.componentId);
+  const artboard = await sceneForPlanItem(root, planItem, componentId);
   if (!artboard) {
-    throw new Error(`No compiled scene for ${params.componentId}. Run research_state_machine_experience first so states exist to export.`);
+    throw new Error(`No compiled scene for ${componentId}. Run research_state_machine_experience first so states exist to export.`);
   }
   (artboard as { sourceSvg?: string }).sourceSvg = svgSource;
 
@@ -1467,8 +1486,18 @@ async function exportAnimation(
     createdAt: nowIso(),
     artboards: [artboard]
   };
+  return { doc, base: path.basename(asset.path, path.extname(asset.path)) };
+}
 
-  const base = path.basename(asset.path, path.extname(asset.path));
+/**
+ * Exports the compiled SceneDoc for an asset as portable artifacts:
+ * Lottie JSON or a self-contained animated SVG.
+ */
+async function exportAnimation(
+  root: string,
+  params: ExportAnimationParams
+): Promise<{ exportPath: string; format: string; bytes: number }> {
+  const { doc, base } = await loadSceneForAsset(root, params.componentId);
   const suffix = params.state ? `.${slugify(params.state)}` : "";
   const dir = path.join(root, ".motion-mcp", "exports");
   await fs.mkdir(dir, { recursive: true });
@@ -1484,6 +1513,40 @@ async function exportAnimation(
   const file = path.join(dir, `${base}${suffix}.lottie.json`);
   await fs.writeFile(file, json, "utf8");
   return { exportPath: path.relative(root, file), format: "lottie", bytes: Buffer.byteLength(json, "utf8") };
+}
+
+interface CaptureGifParams {
+  componentId: string;
+  state?: string;
+  fps?: number;
+  maxFrames?: number;
+  width?: number;
+}
+
+/** Renders a SceneDoc state to an animated GIF via headless SVG rasterization. */
+async function captureGifAsset(
+  root: string,
+  params: CaptureGifParams
+): Promise<{ exportPath: string; frames: number; width: number; height: number; bytes: number }> {
+  const { doc, base } = await loadSceneForAsset(root, params.componentId);
+  const result = await captureSceneGif(doc, {
+    state: params.state,
+    fps: params.fps,
+    maxFrames: params.maxFrames,
+    width: params.width
+  });
+  const suffix = params.state ? `.${slugify(params.state)}` : "";
+  const dir = path.join(root, ".motion-mcp", "exports");
+  await fs.mkdir(dir, { recursive: true });
+  const file = path.join(dir, `${base}${suffix}.gif`);
+  await fs.writeFile(file, result.gif);
+  return {
+    exportPath: path.relative(root, file),
+    frames: result.frames,
+    width: result.width,
+    height: result.height,
+    bytes: result.gif.byteLength
+  };
 }
 
 /**
@@ -1884,6 +1947,8 @@ async function startHttpBridge(): Promise<void> {
     export_animation: ({ rootPath, componentId, format, state, fps }) =>
       exportAnimation(resolveRoot(rootPath), { componentId, format, state, fps }),
     import_riv: ({ rootPath, filePath }) => importRivAsset(resolveRoot(rootPath), filePath),
+    capture_gif: ({ rootPath, componentId, state, fps, maxFrames, width }) =>
+      captureGifAsset(resolveRoot(rootPath), { componentId, state, fps, maxFrames, width }),
     apply_motion_diff: ({ rootPath, diffId }) => applyMotionDiff(resolveRoot(rootPath), diffId),
     preview_animation: async ({ rootPath, diffId }) => {
       const root = resolveRoot(rootPath);

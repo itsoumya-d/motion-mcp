@@ -218,7 +218,7 @@ function spawnServer(port: number): ChildProcessWithoutNullStreams {
 
 async function waitForBridge(port: number): Promise<void> {
   const url = `http://127.0.0.1:${port}/tool/get_credit_balance`;
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -227,6 +227,9 @@ async function waitForBridge(port: number): Promise<void> {
       });
       if (response.ok) return;
     } catch {
+      // Under full-suite parallel load the server process can take a while
+      // to bind — keep polling rather than failing on transient connection
+      // errors.
       await delay(100);
     }
   }

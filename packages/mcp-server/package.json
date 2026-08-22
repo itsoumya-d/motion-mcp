@@ -25,6 +25,7 @@
     "@motion-mcp/asset-indexer": "workspace:*",
     "@motion-mcp/ast-patcher": "workspace:*",
     "@motion-mcp/auto-researcher": "workspace:*",
+    "@motion-mcp/capture": "workspace:*",
     "@motion-mcp/codebase-scanner": "workspace:*",
     "@motion-mcp/credits-ledger": "workspace:*",
     "@motion-mcp/emitter-flutter": "workspace:*",

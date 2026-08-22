@@ -214,6 +214,7 @@ graph TD
 | `player` | Zero-dep `ScenePlayer` + `<motion-scene>` web component: transitions, deterministic seek, reduced-motion |
 | `exporters` | Lottie JSON writer (bezier paths incl. arc→cubic) · CSS-keyframe animated SVG |
 | `riv-importer` | Rive binary format reader per the public spec — fingerprint, ToC backing types, object stream, graceful truncation |
+| `capture` | PNG decoder (zlib + all scanline filters) · GIF89a encoder (exact/popularity palette, LZW) · resvg frame pipeline |
 | `ast-patcher` | Surgical import/usage patches via the TypeScript compiler API |
 | `quiver-provider` | Premium SVG generation with key rotation, backoff, live pricing sync |
 | `credits-ledger` | Reserve → commit/refund credit integrity with local ledger |
@@ -232,7 +233,7 @@ graph TD
 
 Every generated component ships with: reduced-motion handling, semantic labels, controlled/uncontrolled state support, and a host-side state machine you own — nothing phones home at runtime.
 
-## MCP tools (28)
+## MCP tools (29)
 
 **Understand the codebase**
 
@@ -274,6 +275,7 @@ Every generated component ships with: reduced-motion handling, semantic labels, 
 | `preview_animation` / `apply_motion_diff` | Inspect then apply staged diffs with validation |
 | `export_animation` | Bake a SceneDoc state into **Lottie JSON** or self-contained **animated SVG** |
 | `import_riv` | **Migration wedge**: validate any `.riv`, extract its inventory (objects, names, types), stage a SceneDoc skeleton + report |
+| `capture_gif` | Render a SceneDoc state to an animated **GIF** — no browser: headless SVG rasterization + pure-TS GIF89a/LZW encoder |
 | `curate_workout` | Deterministic workout composition for the exercise stack |
 | `get_credit_balance` / `purchase_credits_url` | Credit ops |
 
@@ -409,11 +411,12 @@ motion-mcp/
 - ✅ `export_animation` MCP tool writing `.motion-mcp/exports/`
 
 - ✅ `@motion-mcp/riv-importer`: binary reader per the public `.riv` spec (header, ToC backing-type bits, object stream) + `import_riv` tool
+- ✅ `@motion-mcp/capture`: animated GIF output via headless rasterization — pure-TS LZW/GIF89a, zero browser dependency
 
 Remaining:
 
-1. MP4/GIF headless capture from the player's seek API
-2. Playwright visual snapshots for staged diffs
+1. Playwright visual snapshots for staged diffs
+2. MP4/WebM assembly on top of the existing frame pipeline
 3. Full geometry/state-machine mapping from `.riv` type tables into SceneDoc
 
 **Then — Phase C/D: ecosystem**
