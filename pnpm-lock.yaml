@@ -308,6 +308,9 @@ importers:
       '@motion-mcp/quiver-provider':
         specifier: workspace:*
         version: link:../quiver-provider
+      '@motion-mcp/riv-importer':
+        specifier: workspace:*
+        version: link:../riv-importer
       '@motion-mcp/scene-graph':
         specifier: workspace:*
         version: link:../scene-graph
@@ -358,6 +361,12 @@ importers:
       '@motion-mcp/shared-types':
         specifier: workspace:*
         version: link:../shared-types
+
+  packages/riv-importer:
+    dependencies:
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
 
   packages/scene-graph:
     dependencies:

@@ -35,6 +35,7 @@
     "@motion-mcp/motion-planner": "workspace:*",
     "@motion-mcp/motion-runtime": "workspace:*",
     "@motion-mcp/quiver-provider": "workspace:*",
+    "@motion-mcp/riv-importer": "workspace:*",
     "@motion-mcp/scene-graph": "workspace:*",
     "@motion-mcp/shared-types": "workspace:*",
     "@motion-mcp/state-machine-researcher": "workspace:*",

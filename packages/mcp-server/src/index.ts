@@ -63,6 +63,7 @@ import {
 } from "@motion-mcp/shared-types";
 import { researchStateMachineExperience } from "@motion-mcp/state-machine-researcher";
 import { compileExperienceToScene, type SceneDoc } from "@motion-mcp/scene-graph";
+import { importRiv, toSceneSkeleton } from "@motion-mcp/riv-importer";
 import { toAnimatedSvg, toLottie } from "@motion-mcp/exporters";
 import type {
   PageStateMachineExperience,
@@ -595,6 +596,22 @@ server.registerTool(
     const root = resolveRoot(rootPath);
     await consumeCredits(root, { amount: 2, reason: `export_animation:${format}` });
     return jsonResult(await exportAnimation(root, { componentId, format, state, fps }));
+  }
+);
+
+server.registerTool(
+  "import_riv",
+  {
+    title: "Import .riv file",
+    description: "Migration wedge from Rive: validates a .riv binary, extracts its content inventory (objects, names, type histogram) per the public format spec, indexes the asset, and stages a SceneDoc skeleton + full report under .motion-mcp/riv-imports/.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      filePath: z.string().describe("Path to the .riv file, relative to the project root.")
+    }
+  },
+  async ({ rootPath, filePath }) => {
+    const root = resolveRoot(rootPath);
+    return jsonResult(await importRivAsset(root, filePath));
   }
 );
 
@@ -1469,6 +1486,60 @@ async function exportAnimation(
   return { exportPath: path.relative(root, file), format: "lottie", bytes: Buffer.byteLength(json, "utf8") };
 }
 
+/**
+ * Imports a .riv file: validates the Rive binary format, extracts a full
+ * content inventory, indexes the asset, and stages a SceneDoc skeleton.
+ * The migration wedge for teams moving off Rive.
+ */
+async function importRivAsset(
+  root: string,
+  filePath: string
+): Promise<{
+  ok: boolean;
+  assetId?: string;
+  header?: { majorVersion: number; minorVersion: number; fileId: number };
+  objectCount: number;
+  typeHistogram: Record<string, number>;
+  discoveredNames: string[];
+  warnings: string[];
+  reportPath: string;
+  sceneId?: string;
+}> {
+  const absolute = path.resolve(root, filePath);
+  const buffer = await fs.readFile(absolute);
+  const result = importRiv(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
+  const base = path.basename(filePath, path.extname(filePath));
+
+  const reportDir = path.join(root, ".motion-mcp", "riv-imports");
+  await fs.mkdir(reportDir, { recursive: true });
+  const reportPath = path.join(reportDir, `${base}.json`);
+  const skeleton = toSceneSkeleton(result, base);
+  await fs.writeFile(reportPath, `${JSON.stringify({ result, skeleton }, null, 2)}\n`, "utf8");
+
+  if (result.header) {
+    const relativePath = path.relative(root, absolute).split(path.sep).join("/");
+    await upsertIndexedAsset(root, {
+      id: stableId("asset", relativePath),
+      path: relativePath,
+      type: "rive",
+      semanticLabels: Array.from(new Set(result.strings.map((hit) => hit.value))).slice(0, 12),
+      sizeBytes: buffer.byteLength
+    });
+  }
+
+  return {
+    ok: result.ok,
+    assetId: result.header ? stableId("asset", filePath) : undefined,
+    header: result.header,
+    objectCount: result.objects.length,
+    typeHistogram: result.typeHistogram,
+    discoveredNames: Array.from(new Set(result.strings.map((hit) => hit.value))).slice(0, 12),
+    warnings: result.warnings,
+    reportPath: path.relative(root, reportPath),
+    sceneId: result.ok ? skeleton.sceneId : undefined
+  };
+}
+
 function componentNameFromFiles(files: FileChange[]): string {  const generated = files.find((file) => file.path.includes(".motion-mcp/generated/"));
   if (!generated) throw new Error("no generated component file found");
   return path.basename(generated.path, path.extname(generated.path));
@@ -1812,6 +1883,7 @@ async function startHttpBridge(): Promise<void> {
       generateAnimation(resolveRoot(rootPath), componentId, options ?? {}),
     export_animation: ({ rootPath, componentId, format, state, fps }) =>
       exportAnimation(resolveRoot(rootPath), { componentId, format, state, fps }),
+    import_riv: ({ rootPath, filePath }) => importRivAsset(resolveRoot(rootPath), filePath),
     apply_motion_diff: ({ rootPath, diffId }) => applyMotionDiff(resolveRoot(rootPath), diffId),
     preview_animation: async ({ rootPath, diffId }) => {
       const root = resolveRoot(rootPath);

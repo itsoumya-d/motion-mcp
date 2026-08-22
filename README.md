@@ -213,6 +213,7 @@ graph TD
 | `emitter-flutter` / `-unity` (β) | AnimationController wrappers / UI pointer behavior, DOTween-ready |
 | `player` | Zero-dep `ScenePlayer` + `<motion-scene>` web component: transitions, deterministic seek, reduced-motion |
 | `exporters` | Lottie JSON writer (bezier paths incl. arc→cubic) · CSS-keyframe animated SVG |
+| `riv-importer` | Rive binary format reader per the public spec — fingerprint, ToC backing types, object stream, graceful truncation |
 | `ast-patcher` | Surgical import/usage patches via the TypeScript compiler API |
 | `quiver-provider` | Premium SVG generation with key rotation, backoff, live pricing sync |
 | `credits-ledger` | Reserve → commit/refund credit integrity with local ledger |
@@ -231,7 +232,7 @@ graph TD
 
 Every generated component ships with: reduced-motion handling, semantic labels, controlled/uncontrolled state support, and a host-side state machine you own — nothing phones home at runtime.
 
-## MCP tools (27)
+## MCP tools (28)
 
 **Understand the codebase**
 
@@ -272,6 +273,7 @@ Every generated component ships with: reduced-motion handling, semantic labels, 
 | `generate_animation` | SceneDoc-compiled native motion code (options: `style`, `trigger`, `intensity`, `framework`, `patchIntoSource`, `usageAnchor`) |
 | `preview_animation` / `apply_motion_diff` | Inspect then apply staged diffs with validation |
 | `export_animation` | Bake a SceneDoc state into **Lottie JSON** or self-contained **animated SVG** |
+| `import_riv` | **Migration wedge**: validate any `.riv`, extract its inventory (objects, names, types), stage a SceneDoc skeleton + report |
 | `curate_workout` | Deterministic workout composition for the exercise stack |
 | `get_credit_balance` / `purchase_credits_url` | Credit ops |
 
@@ -406,11 +408,13 @@ motion-mcp/
 - ✅ `@motion-mcp/exporters`: Lottie JSON (full path→bezier incl. arcs) · animated SVG with baked keyframes
 - ✅ `export_animation` MCP tool writing `.motion-mcp/exports/`
 
+- ✅ `@motion-mcp/riv-importer`: binary reader per the public `.riv` spec (header, ToC backing-type bits, object stream) + `import_riv` tool
+
 Remaining:
 
-1. `.riv` importer → SceneDoc migration wedge
-2. MP4/GIF headless capture from the player's seek API
-3. Playwright visual snapshots for staged diffs
+1. MP4/GIF headless capture from the player's seek API
+2. Playwright visual snapshots for staged diffs
+3. Full geometry/state-machine mapping from `.riv` type tables into SceneDoc
 
 **Then — Phase C/D: ecosystem**
 
