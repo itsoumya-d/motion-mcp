@@ -31,6 +31,7 @@
     "@motion-mcp/emitter-react": "workspace:*",
     "@motion-mcp/emitter-react-native": "workspace:*",
     "@motion-mcp/emitter-unity": "workspace:*",
+    "@motion-mcp/exporters": "workspace:*",
     "@motion-mcp/motion-planner": "workspace:*",
     "@motion-mcp/motion-runtime": "workspace:*",
     "@motion-mcp/quiver-provider": "workspace:*",

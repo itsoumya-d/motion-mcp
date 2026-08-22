@@ -69,6 +69,7 @@ flowchart LR
         E3["Flutter β<br/>AnimationController"]
         E4["Unity β<br/>UI pointer behavior"]
         P["ast-patcher<br/>TS AST import patching"]
+        EX["exporters<br/>Lottie · animated SVG"]
     end
 
     subgraph SHIP["✅ Ship"]
@@ -83,6 +84,7 @@ flowchart LR
     SG --> E1 & E2 & E3 & E4
     P --> D
     E1 & E2 & E3 & E4 --> D
+    SG -.-> EX
     D --> PV --> AP
 ```
 
@@ -209,6 +211,8 @@ graph TD
 | `motion-runtime` | Zero-dependency skeletal FK player: keyframed clips, crossfade layers, hysteresis rep counting |
 | `emitter-react` / `-react-native` | Framer Motion variants + transition tables / Reanimated 3 + `react-native-svg` |
 | `emitter-flutter` / `-unity` (β) | AnimationController wrappers / UI pointer behavior, DOTween-ready |
+| `player` | Zero-dep `ScenePlayer` + `<motion-scene>` web component: transitions, deterministic seek, reduced-motion |
+| `exporters` | Lottie JSON writer (bezier paths incl. arc→cubic) · CSS-keyframe animated SVG |
 | `ast-patcher` | Surgical import/usage patches via the TypeScript compiler API |
 | `quiver-provider` | Premium SVG generation with key rotation, backoff, live pricing sync |
 | `credits-ledger` | Reserve → commit/refund credit integrity with local ledger |
@@ -227,7 +231,7 @@ graph TD
 
 Every generated component ships with: reduced-motion handling, semantic labels, controlled/uncontrolled state support, and a host-side state machine you own — nothing phones home at runtime.
 
-## MCP tools (26)
+## MCP tools (27)
 
 **Understand the codebase**
 
@@ -267,6 +271,7 @@ Every generated component ships with: reduced-motion handling, semantic labels, 
 |---|---|
 | `generate_animation` | SceneDoc-compiled native motion code (options: `style`, `trigger`, `intensity`, `framework`, `patchIntoSource`, `usageAnchor`) |
 | `preview_animation` / `apply_motion_diff` | Inspect then apply staged diffs with validation |
+| `export_animation` | Bake a SceneDoc state into **Lottie JSON** or self-contained **animated SVG** |
 | `curate_workout` | Deterministic workout composition for the exercise stack |
 | `get_credit_balance` / `purchase_credits_url` | Credit ops |
 
@@ -395,12 +400,17 @@ motion-mcp/
 - ✅ `ast-patcher`: generated imports staged into real source files behind flags
 - ✅ Conformance harness with cross-target goldens
 
-**Next — Phase B: portability**
+**Phase B: portability (in motion)**
 
-1. `<motion-scene>` zero-dep web-component player playing raw SceneDocs
-2. Exporters: Lottie JSON · animated SVG · MP4/GIF headless capture
-3. `.riv` importer → SceneDoc migration wedge
-4. Playwright visual snapshots for staged diffs
+- ✅ `@motion-mcp/player`: `ScenePlayer` (transition graph, loop-aware seek, reduced-motion) + `<motion-scene>` web component
+- ✅ `@motion-mcp/exporters`: Lottie JSON (full path→bezier incl. arcs) · animated SVG with baked keyframes
+- ✅ `export_animation` MCP tool writing `.motion-mcp/exports/`
+
+Remaining:
+
+1. `.riv` importer → SceneDoc migration wedge
+2. MP4/GIF headless capture from the player's seek API
+3. Playwright visual snapshots for staged diffs
 
 **Then — Phase C/D: ecosystem**
 

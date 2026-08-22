@@ -62,7 +62,8 @@ import {
   stableId
 } from "@motion-mcp/shared-types";
 import { researchStateMachineExperience } from "@motion-mcp/state-machine-researcher";
-import { compileExperienceToScene } from "@motion-mcp/scene-graph";
+import { compileExperienceToScene, type SceneDoc } from "@motion-mcp/scene-graph";
+import { toAnimatedSvg, toLottie } from "@motion-mcp/exporters";
 import type {
   PageStateMachineExperience,
   StateMachineExperienceResult
@@ -574,6 +575,26 @@ server.registerTool(
       summary: diff.summary,
       files: diff.files.map((file) => file.path)
     });
+  }
+);
+
+server.registerTool(
+  "export_animation",
+  {
+    title: "Export animation",
+    description: "Export an asset's compiled SceneDoc as Lottie JSON or a self-contained animated SVG. Requires research_state_machine_experience to have run.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      componentId: z.string(),
+      format: z.enum(["animated-svg", "lottie"]).default("lottie"),
+      state: z.string().optional().describe("State whose clip to bake. Defaults to the machine's initial state."),
+      fps: z.number().optional()
+    }
+  },
+  async ({ rootPath, componentId, format, state, fps }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 2, reason: `export_animation:${format}` });
+    return jsonResult(await exportAnimation(root, { componentId, format, state, fps }));
   }
 );
 
@@ -1375,8 +1396,80 @@ async function generateAnimation(
   return diff;
 }
 
-function componentNameFromFiles(files: FileChange[]): string {
-  const generated = files.find((file) => file.path.includes(".motion-mcp/generated/"));
+interface ExportAnimationParams {
+  componentId: string;
+  format: "animated-svg" | "lottie";
+  state?: string;
+  fps?: number;
+}
+
+/**
+ * Exports the compiled SceneDoc for an asset as portable artifacts:
+ * Lottie JSON or a self-contained animated SVG.
+ */
+async function exportAnimation(
+  root: string,
+  params: ExportAnimationParams
+): Promise<{ exportPath: string; format: string; bytes: number }> {
+  const assets = await loadOptionalJson<AssetIndexResult>(root, "assets.json");
+  const asset = assets?.assets.find((candidate) => candidate.id === params.componentId);
+  if (!asset || asset.type !== "svg") {
+    throw new Error(`No indexed SVG asset found for ${params.componentId}. Run scan_assets or generate an asset first.`);
+  }
+
+  let svgSource: string;
+  try {
+    svgSource = await fs.readFile(path.join(root, asset.path), "utf8");
+  } catch {
+    throw new Error(`Asset file missing on disk: ${asset.path}`);
+  }
+
+  const planItem: MotionPlanResult["plan"][number] = {
+    componentId: asset.id,
+    assetId: asset.id,
+    file: asset.path,
+    framework: "next",
+    runtime: ["framer-motion"],
+    interactionIdea: `Export motion for ${asset.path}`,
+    whyItMatters: "",
+    suggestedTrigger: "hover",
+    premiumScore: 0,
+    estimatedCredits: 0,
+    complexity: "low"
+  };
+  const artboard = await sceneForPlanItem(root, planItem, params.componentId);
+  if (!artboard) {
+    throw new Error(`No compiled scene for ${params.componentId}. Run research_state_machine_experience first so states exist to export.`);
+  }
+  (artboard as { sourceSvg?: string }).sourceSvg = svgSource;
+
+  const doc: SceneDoc = {
+    formatVersion: 1,
+    sceneId: `scene_${asset.id}`,
+    name: asset.path,
+    createdAt: nowIso(),
+    artboards: [artboard]
+  };
+
+  const base = path.basename(asset.path, path.extname(asset.path));
+  const suffix = params.state ? `.${slugify(params.state)}` : "";
+  const dir = path.join(root, ".motion-mcp", "exports");
+  await fs.mkdir(dir, { recursive: true });
+
+  if (params.format === "animated-svg") {
+    const output = toAnimatedSvg(doc, { state: params.state });
+    const file = path.join(dir, `${base}${suffix}.svg`);
+    await fs.writeFile(file, output, "utf8");
+    return { exportPath: path.relative(root, file), format: "animated-svg", bytes: Buffer.byteLength(output, "utf8") };
+  }
+
+  const json = `${JSON.stringify(toLottie(doc, { state: params.state, fps: params.fps }), null, 2)}\n`;
+  const file = path.join(dir, `${base}${suffix}.lottie.json`);
+  await fs.writeFile(file, json, "utf8");
+  return { exportPath: path.relative(root, file), format: "lottie", bytes: Buffer.byteLength(json, "utf8") };
+}
+
+function componentNameFromFiles(files: FileChange[]): string {  const generated = files.find((file) => file.path.includes(".motion-mcp/generated/"));
   if (!generated) throw new Error("no generated component file found");
   return path.basename(generated.path, path.extname(generated.path));
 }
@@ -1717,6 +1810,8 @@ async function startHttpBridge(): Promise<void> {
       }),
     generate_animation: ({ rootPath, componentId, options }) =>
       generateAnimation(resolveRoot(rootPath), componentId, options ?? {}),
+    export_animation: ({ rootPath, componentId, format, state, fps }) =>
+      exportAnimation(resolveRoot(rootPath), { componentId, format, state, fps }),
     apply_motion_diff: ({ rootPath, diffId }) => applyMotionDiff(resolveRoot(rootPath), diffId),
     preview_animation: async ({ rootPath, diffId }) => {
       const root = resolveRoot(rootPath);

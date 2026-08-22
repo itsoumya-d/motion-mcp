@@ -246,6 +246,18 @@ importers:
         specifier: workspace:*
         version: link:../shared-types
 
+  packages/exporters:
+    dependencies:
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
+      '@motion-mcp/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+      '@motion-mcp/svg-parser':
+        specifier: workspace:*
+        version: link:../svg-parser
+
   packages/mcp-server:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -284,6 +296,9 @@ importers:
       '@motion-mcp/emitter-unity':
         specifier: workspace:*
         version: link:../emitter-unity
+      '@motion-mcp/exporters':
+        specifier: workspace:*
+        version: link:../exporters
       '@motion-mcp/motion-planner':
         specifier: workspace:*
         version: link:../motion-planner
@@ -325,6 +340,18 @@ importers:
         version: link:../shared-types
 
   packages/motion-runtime: {}
+
+  packages/player:
+    dependencies:
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
+      '@motion-mcp/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+      '@motion-mcp/svg-parser':
+        specifier: workspace:*
+        version: link:../svg-parser
 
   packages/quiver-provider:
     dependencies:
