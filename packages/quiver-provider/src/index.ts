@@ -42,22 +42,59 @@ export interface QuiverSvgResult {
 const DEFAULT_BASE_URL = "https://api.quiver.ai/v1";
 const DEFAULT_MODEL: SvgModelId = "arrow-1.1";
 const MAX_MODEL: SvgModelId = "arrow-1.1-max";
+// Pricing verified against GET /v1/models on the live QuiverAI API.
 const FALLBACK_MODELS: SvgModelInfo[] = [
   {
     id: DEFAULT_MODEL,
     name: "Arrow 1.1",
-    pricingCredits: 25,
+    pricingCredits: 20,
     available: true,
     default: true
   },
   {
     id: MAX_MODEL,
     name: "Arrow 1.1 Max",
-    pricingCredits: 50,
+    pricingCredits: 25,
     available: true,
     maxQuality: true
+  },
+  {
+    id: "arrow-1" as SvgModelId,
+    name: "Arrow 1.0",
+    pricingCredits: 30,
+    available: true
   }
 ];
+
+/** Keys that should be rotated away from after auth/payment/rate-limit failures. */
+const KEY_FAILURE_STATUSES = new Set([401, 402, 429]);
+const MAX_ATTEMPTS_PER_KEY = 2;
+const MAX_BACKOFF_MS = 8_000;
+
+export function parseApiKeys(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((key) => key.trim())
+    .filter(Boolean);
+}
+
+export function backoffDelayMs(attempt: number, rateLimitResetHeader?: string | null): number {
+  const reset = parseRateLimitReset(rateLimitResetHeader);
+  if (reset !== undefined) {
+    return Math.min(Math.max(reset, 250), MAX_BACKOFF_MS);
+  }
+  return Math.min(500 * 2 ** attempt, MAX_BACKOFF_MS);
+}
+
+function parseRateLimitReset(header?: string | null): number | undefined {
+  if (!header) return undefined;
+  const asSeconds = Number.parseInt(header, 10);
+  if (Number.isFinite(asSeconds)) return asSeconds * 1000;
+  const asDate = Date.parse(header);
+  if (Number.isFinite(asDate)) return asDate - Date.now();
+  return undefined;
+}
 
 export function selectSvgModel(input: {
   requested?: SvgModelId;
@@ -77,18 +114,34 @@ export function motionCreditsForQuiver(pricingCredits: number, marginMultiplier 
 }
 
 export class QuiverProvider {
-  private readonly apiKey?: string;
+  private readonly apiKeys: string[];
+  private keyIndex = 0;
   private readonly baseUrl: string;
   private readonly mock: boolean;
 
   constructor(options: QuiverProviderOptions = {}) {
-    this.apiKey = options.apiKey ?? process.env.QUIVERAI_API_KEY;
+    this.apiKeys = options.apiKey
+      ? [options.apiKey]
+      : parseApiKeys(process.env.QUIVERAI_API_KEYS).length
+        ? parseApiKeys(process.env.QUIVERAI_API_KEYS)
+        : parseApiKeys(process.env.QUIVERAI_API_KEY);
     this.baseUrl = options.baseUrl ?? process.env.QUIVERAI_BASE_URL ?? DEFAULT_BASE_URL;
-    this.mock = options.mock ?? (process.env.MOTION_MCP_QUIVER_MOCK === "1" || !this.apiKey);
+    this.mock = options.mock ?? (process.env.MOTION_MCP_QUIVER_MOCK === "1" || !this.apiKeys.length);
+  }
+
+  /** Number of live keys available for rotation. */
+  get keyCount(): number {
+    return this.apiKeys.length;
+  }
+
+  private rotateKey(): void {
+    if (this.apiKeys.length > 1) {
+      this.keyIndex = (this.keyIndex + 1) % this.apiKeys.length;
+    }
   }
 
   async listModels(): Promise<SvgModelInfo[]> {
-    if (this.mock || !this.apiKey) {
+    if (this.mock || !this.apiKeys.length) {
       return FALLBACK_MODELS;
     }
     const response = await this.request("GET", "/models");
@@ -108,7 +161,7 @@ export class QuiverProvider {
       instructions: input.instructions
     });
     const modelInfo = await this.getModel(model);
-    if (this.mock || !this.apiKey) {
+    if (this.mock || !this.apiKeys.length) {
       return {
         svg: mockSvg(input.prompt, input.instructions),
         model,
@@ -141,7 +194,7 @@ export class QuiverProvider {
       instructions: input.instructions
     });
     const modelInfo = await this.getModel(model);
-    if (this.mock || !this.apiKey) {
+    if (this.mock || !this.apiKeys.length) {
       return {
         svg: mockSvg("Vectorized app asset", input.instructions),
         model,
@@ -167,23 +220,70 @@ export class QuiverProvider {
     };
   }
 
+  /**
+   * Sends a request, retrying with exponential backoff on 429/5xx and
+   * rotating across QUIVERAI_API_KEYS when a key hits auth (401),
+   * insufficient credits (402), or rate limits (429).
+   */
   private async request(method: "GET" | "POST", pathname: string, body?: unknown): Promise<Response> {
-    if (!this.apiKey) {
-      throw new Error("QUIVERAI_API_KEY is required for real QuiverAI requests. Set MOTION_MCP_QUIVER_MOCK=1 for local mock mode.");
+    if (!this.apiKeys.length) {
+      throw new Error("QUIVERAI_API_KEY or QUIVERAI_API_KEYS is required for real QuiverAI requests. Set MOTION_MCP_QUIVER_MOCK=1 for local mock mode.");
     }
-    const response = await fetch(`${this.baseUrl}${pathname}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${this.apiKey}`,
-        "content-type": "application/json"
-      },
-      body: body ? JSON.stringify(body) : undefined
-    });
-    if (!response.ok) {
-      throw await quiverError(response);
+    let lastError: Error | null = null;
+    for (let keyVisit = 0; keyVisit < this.apiKeys.length; keyVisit += 1) {
+      const apiKey = this.apiKeys[this.keyIndex];
+      let attempt = 0;
+      while (attempt < MAX_ATTEMPTS_PER_KEY) {
+        let response: Response;
+        try {
+          response = await fetch(`${this.baseUrl}${pathname}`, {
+            method,
+            headers: {
+              authorization: `Bearer ${apiKey}`,
+              "content-type": "application/json"
+            },
+            body: body ? JSON.stringify(body) : undefined
+          });
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          attempt += 1;
+          if (attempt < MAX_ATTEMPTS_PER_KEY) {
+            await sleep(backoffDelayMs(attempt));
+            continue;
+          }
+          break;
+        }
+        if (response.ok) {
+          return response;
+        }
+        lastError = await quiverError(response);
+        if (response.status === 429 || response.status >= 500) {
+          attempt += 1;
+          if (attempt < MAX_ATTEMPTS_PER_KEY) {
+            await sleep(backoffDelayMs(attempt - 1, response.headers.get("x-ratelimit-reset")));
+            continue;
+          }
+        }
+        break;
+      }
+      const failureStatus = statusFromError(lastError);
+      if (KEY_FAILURE_STATUSES.has(failureStatus)) {
+        this.rotateKey();
+        continue;
+      }
+      throw lastError ?? new Error("QuiverAI request failed.");
     }
-    return response;
+    throw lastError ?? new Error("QuiverAI request failed after trying all API keys.");
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function statusFromError(error: Error | null): number {
+  const match = /\((\d{3})\)/.exec(error?.message ?? "");
+  return match ? Number.parseInt(match[1], 10) : 0;
 }
 
 function normalizeModels(payload: unknown): SvgModelInfo[] {
