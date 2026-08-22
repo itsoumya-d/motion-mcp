@@ -170,8 +170,18 @@ apply_motion_diff({ rootPath: "examples/next-app", diffId: "<from generate>" })
 
 ## Roadmap
 
-1. Patch generated components into real imports with AST transforms.
-2. Add Playwright preview snapshots for generated React/Next motion.
-3. Mirror local credit/usage records to Supabase and Stripe checkout/customer portal.
-4. Store accepted/rejected SVG part labels, prompts, emitted code shape, validation result, and user edits for a motion grammar dataset.
-5. Add optional export/adapters for Rive/Lottie-style ecosystems after framework-native generation is stable.
+Phase A foundations (shipped):
+
+- `@motion-mcp/svg-parser` - real DOM-based SVG parsing (`@xmldom/xmldom`): multi-line attributes, style/CSS cascade, composed transforms, `use`/`defs` expansion, gradient registry. All consumers (asset-indexer, mcp-server) are ported onto it.
+- `@motion-mcp/scene-graph` - **SceneDoc**, the unified open scene format spanning Rive-like UI state machines and keyframed clips. Compiles page state-machine experiences into real per-state keyframe clips via a deterministic motion grammar, migrates pipeline-baked MotionDocs, validates references, and samples tracks as the reference evaluator for conformance.
+- Spec-to-code disconnect closed: `generate_animation` loads `.motion-mcp/state-machine-experience.json`, compiles it through SceneDoc, and all four emitters render actual states/transitions/clips instead of a fixed template.
+- `@motion-mcp/ast-patcher` - TypeScript AST import/usage patching behind `patchIntoSource` / `usageAnchor` options on `generate_animation`.
+- Conformance harness (`tests/conformance.test.ts`) - one SceneDoc fixture drives React/RN/Flutter/Unity outputs byte-deterministically, with pinned sampled reference frames.
+
+Next:
+
+1. Playwright preview snapshots of staged diffs (visual goldens).
+2. Mirror local credit/usage records to Supabase and Stripe checkout/customer portal.
+3. Store accepted/rejected SVG part labels, prompts, emitted code shape, validation result, and user edits for a motion grammar dataset.
+4. Export adapters: Lottie JSON, animated SVG, MP4/GIF via headless capture; `.riv` importer (parse documented format into SceneDoc).
+5. Portable zero-dep `<motion-scene>` web component player for raw SceneDocs.

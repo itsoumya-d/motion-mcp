@@ -1,10 +1,14 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
+  flattenSvgNodes,
+  parseSvgDimensions,
+  parseSvgTree
+} from "@motion-mcp/svg-parser";
+import {
   type AssetIndexResult,
   type AssetInfo,
   type AssetType,
-  type SvgNodeInfo,
   nowIso,
   stableId
 } from "@motion-mcp/shared-types";
@@ -35,22 +39,6 @@ const ASSET_EXTENSIONS = new Set([
   ".jpeg",
   ".webp",
   ".gif"
-]);
-
-const SVG_TAGS = new Set([
-  "svg",
-  "g",
-  "path",
-  "circle",
-  "rect",
-  "ellipse",
-  "line",
-  "polyline",
-  "polygon",
-  "text",
-  "defs",
-  "linearGradient",
-  "radialGradient"
 ]);
 
 export async function scanAssets(rootPath: string): Promise<AssetIndexResult> {
@@ -141,103 +129,6 @@ async function analyzeAsset(
   };
 }
 
-function parseSvgDimensions(source: string): AssetInfo["dimensions"] {
-  const svgOpen = source.match(/<svg\b([^>]*)>/i)?.[1] ?? "";
-  const attrs = parseAttrs(svgOpen);
-  const width = toNumber(attrs.width);
-  const height = toNumber(attrs.height);
-  return {
-    width,
-    height,
-    viewBox: attrs.viewBox ?? attrs.viewbox
-  };
-}
-
-function parseSvgTree(source: string): SvgNodeInfo[] {
-  const stack: SvgNodeInfo[] = [];
-  const roots: SvgNodeInfo[] = [];
-  let autoId = 0;
-  const tagRegex = /<\/?([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/g;
-  let match: RegExpExecArray | null;
-  while ((match = tagRegex.exec(source))) {
-    const full = match[0] ?? "";
-    const tag = match[1] ?? "";
-    const attrSource = match[2] ?? "";
-    if (!SVG_TAGS.has(tag) || full.startsWith("</")) {
-      if (full.startsWith("</")) {
-        const index = findLastStackIndex(stack, tag);
-        if (index !== -1) {
-          stack.splice(index);
-        }
-      }
-      continue;
-    }
-    const attrs = parseAttrs(attrSource);
-    const node: SvgNodeInfo = {
-      nodeId: attrs.id || `node-${++autoId}`,
-      tag,
-      id: attrs.id,
-      className: attrs.class,
-      attrs,
-      roleGuess: guessRole(tag, attrs),
-      semanticLabel: guessSemanticLabel(tag, attrs),
-      children: []
-    };
-    const parent = stack[stack.length - 1];
-    if (parent) {
-      parent.children.push(node);
-    } else {
-      roots.push(node);
-    }
-    if (!full.endsWith("/>")) {
-      stack.push(node);
-    }
-  }
-  return roots;
-}
-
-function parseAttrs(source: string): Record<string, string> {
-  const attrs: Record<string, string> = {};
-  const attrRegex = /([A-Za-z_:][A-Za-z0-9_:.-]*)\s*=\s*["']([^"']*)["']/g;
-  let match: RegExpExecArray | null;
-  while ((match = attrRegex.exec(source))) {
-    if (match[1]) {
-      attrs[match[1]] = match[2] ?? "";
-    }
-  }
-  return attrs;
-}
-
-function guessRole(tag: string, attrs: Record<string, string>): string {
-  const joined = `${attrs.id ?? ""} ${attrs.class ?? ""}`.toLowerCase();
-  if (/eye|pupil|iris/.test(joined)) return "eye";
-  if (/mouth|smile|lip/.test(joined)) return "mouth";
-  if (/hand|arm|leg|foot|wing/.test(joined)) return "limb";
-  if (/shadow|shade/.test(joined)) return "shadow";
-  if (/spark|star|shine|glow/.test(joined)) return "sparkle";
-  if (/needle|dial|tick|gauge/.test(joined)) return "gauge-part";
-  if (/logo|mark|brand/.test(joined)) return "logo-mark";
-  if (tag === "path") return "shape-path";
-  if (tag === "g") return "group";
-  return tag;
-}
-
-function guessSemanticLabel(tag: string, attrs: Record<string, string>): string {
-  const explicit = attrs.id || attrs["data-name"] || attrs["aria-label"] || attrs.class;
-  if (explicit) {
-    return explicit
-      .replace(/[_]+/g, "-")
-      .replace(/\s+/g, "-")
-      .replace(/--+/g, "-")
-      .toLowerCase();
-  }
-  return guessRole(tag, attrs);
-}
-
-function flattenSvgNodes(node: SvgNodeInfo): SvgNodeInfo[] {
-  return [node, ...node.children.flatMap(flattenSvgNodes)];
-}
-
 function detectAssetType(ext: string): AssetType {
   if (ext === ".svg") return "svg";
   if (ext === ".riv") return "rive";
@@ -279,25 +170,10 @@ function inferLabelsFromName(relativePath: string): string[] {
   return unique(labels);
 }
 
-function toNumber(raw: string | undefined): number | undefined {
-  if (!raw) return undefined;
-  const parsed = Number.parseFloat(raw);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
 function rel(root: string, file: string): string {
   return path.relative(root, file).split(path.sep).join("/");
 }
 
 function unique<T>(items: T[]): T[] {
   return Array.from(new Set(items));
-}
-
-function findLastStackIndex(stack: SvgNodeInfo[], tag: string): number {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    if (stack[index]?.tag === tag) {
-      return index;
-    }
-  }
-  return -1;
 }

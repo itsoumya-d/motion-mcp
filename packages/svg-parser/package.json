@@ -1,5 +1,5 @@
 {
-  "name": "@motion-mcp/codebase-scanner",
+  "name": "@motion-mcp/svg-parser",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -16,6 +16,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@motion-mcp/shared-types": "workspace:*"
+    "@motion-mcp/shared-types": "workspace:*",
+    "@xmldom/xmldom": "^0.9.12"
   }
 }

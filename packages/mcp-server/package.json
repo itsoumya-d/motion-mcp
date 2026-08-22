@@ -1,6 +1,7 @@
 {
   "name": "@motion-mcp/server",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "type": "module",
   "bin": {
     "motion-mcp": "dist/index.js"
@@ -22,6 +23,7 @@
     "@motion-mcp/anatomy-engine": "workspace:*",
     "@motion-mcp/app-researcher": "workspace:*",
     "@motion-mcp/asset-indexer": "workspace:*",
+    "@motion-mcp/ast-patcher": "workspace:*",
     "@motion-mcp/auto-researcher": "workspace:*",
     "@motion-mcp/codebase-scanner": "workspace:*",
     "@motion-mcp/credits-ledger": "workspace:*",
@@ -32,8 +34,10 @@
     "@motion-mcp/motion-planner": "workspace:*",
     "@motion-mcp/motion-runtime": "workspace:*",
     "@motion-mcp/quiver-provider": "workspace:*",
+    "@motion-mcp/scene-graph": "workspace:*",
     "@motion-mcp/shared-types": "workspace:*",
     "@motion-mcp/state-machine-researcher": "workspace:*",
+    "@motion-mcp/svg-parser": "workspace:*",
     "@motion-mcp/validator": "workspace:*",
     "zod": "^3.24.1"
   }

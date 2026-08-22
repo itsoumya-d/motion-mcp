@@ -173,6 +173,15 @@ importers:
       '@motion-mcp/shared-types':
         specifier: workspace:*
         version: link:../shared-types
+      '@motion-mcp/svg-parser':
+        specifier: workspace:*
+        version: link:../svg-parser
+
+  packages/ast-patcher:
+    dependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.8.3
 
   packages/auto-researcher:
     dependencies:
@@ -203,24 +212,36 @@ importers:
 
   packages/emitter-flutter:
     dependencies:
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
       '@motion-mcp/shared-types':
         specifier: workspace:*
         version: link:../shared-types
 
   packages/emitter-react:
     dependencies:
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
       '@motion-mcp/shared-types':
         specifier: workspace:*
         version: link:../shared-types
 
   packages/emitter-react-native:
     dependencies:
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
       '@motion-mcp/shared-types':
         specifier: workspace:*
         version: link:../shared-types
 
   packages/emitter-unity:
     dependencies:
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
       '@motion-mcp/shared-types':
         specifier: workspace:*
         version: link:../shared-types
@@ -239,6 +260,9 @@ importers:
       '@motion-mcp/asset-indexer':
         specifier: workspace:*
         version: link:../asset-indexer
+      '@motion-mcp/ast-patcher':
+        specifier: workspace:*
+        version: link:../ast-patcher
       '@motion-mcp/auto-researcher':
         specifier: workspace:*
         version: link:../auto-researcher
@@ -269,12 +293,18 @@ importers:
       '@motion-mcp/quiver-provider':
         specifier: workspace:*
         version: link:../quiver-provider
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
       '@motion-mcp/shared-types':
         specifier: workspace:*
         version: link:../shared-types
       '@motion-mcp/state-machine-researcher':
         specifier: workspace:*
         version: link:../state-machine-researcher
+      '@motion-mcp/svg-parser':
+        specifier: workspace:*
+        version: link:../svg-parser
       '@motion-mcp/validator':
         specifier: workspace:*
         version: link:../validator
@@ -302,6 +332,12 @@ importers:
         specifier: workspace:*
         version: link:../shared-types
 
+  packages/scene-graph:
+    dependencies:
+      '@motion-mcp/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+
   packages/shared-types: {}
 
   packages/state-machine-researcher:
@@ -315,6 +351,15 @@ importers:
       '@motion-mcp/shared-types':
         specifier: workspace:*
         version: link:../shared-types
+
+  packages/svg-parser:
+    dependencies:
+      '@motion-mcp/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+      '@xmldom/xmldom':
+        specifier: ^0.9.12
+        version: 0.9.12
 
   packages/validator:
     dependencies:
@@ -2264,6 +2309,11 @@ packages:
 
   '@xmldom/xmldom@0.9.10':
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
+    engines: {node: '>=14.6'}
+    deprecated: this version has critical issues, please update to the latest version
+
+  '@xmldom/xmldom@0.9.12':
+    resolution: {integrity: sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A==}
     engines: {node: '>=14.6'}
 
   abort-controller@3.0.0:
@@ -7825,6 +7875,8 @@ snapshots:
   '@xmldom/xmldom@0.8.15': {}
 
   '@xmldom/xmldom@0.9.10': {}
+
+  '@xmldom/xmldom@0.9.12': {}
 
   abort-controller@3.0.0:
     dependencies:

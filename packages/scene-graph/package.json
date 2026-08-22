@@ -1,5 +1,5 @@
 {
-  "name": "@motion-mcp/codebase-scanner",
+  "name": "@motion-mcp/scene-graph",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "type": "module",

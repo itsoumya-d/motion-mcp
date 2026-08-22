@@ -155,6 +155,16 @@ export interface SvgNodeInfo {
   attrs: Record<string, string>;
   semanticLabel?: string;
   children: SvgNodeInfo[];
+  /** Effective CSS cascade result: inherited paint + presentation attrs + <style> rules + inline style. */
+  style?: Record<string, string>;
+  /** Composed affine matrix [a, b, c, d, e, f] from all ancestor transforms. */
+  resolvedTransform?: number[];
+  /** Product of ancestor group opacities and own opacity (0..1). */
+  opacity?: number;
+  /** True when display:none / visibility:hidden on this node or any ancestor. */
+  hidden?: boolean;
+  depth?: number;
+  textContent?: string;
 }
 
 export interface AssetInfo {
@@ -688,6 +698,10 @@ export interface GenerateAnimationOptions {
   trigger?: MotionTrigger;
   framework?: FrameworkKind;
   intensity?: "subtle" | "expressive" | "hero";
+  /** Stage an AST patch that imports the generated component into its source file. */
+  patchIntoSource?: boolean;
+  /** Anchor text inside the source file after which <Component /> is staged. */
+  usageAnchor?: string;
 }
 
 export const STANDARD_MOTION_STATES: MotionState[] = [

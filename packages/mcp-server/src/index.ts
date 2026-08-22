@@ -39,6 +39,11 @@ import {
   selectSvgModel
 } from "@motion-mcp/quiver-provider";
 import {
+  flattenSvgNodes,
+  parseSvgDimensions,
+  parseSvgTree
+} from "@motion-mcp/svg-parser";
+import {
   type AssetIndexResult,
   type AssetInfo,
   type AssetLaneDecision,
@@ -52,12 +57,16 @@ import {
   type MotionPlanResult,
   type QuiverUsageRecord,
   type SimpleSvgAssetBriefResult,
-  type SvgNodeInfo,
   type SvgModelId,
   nowIso,
   stableId
 } from "@motion-mcp/shared-types";
 import { researchStateMachineExperience } from "@motion-mcp/state-machine-researcher";
+import { compileExperienceToScene } from "@motion-mcp/scene-graph";
+import type {
+  PageStateMachineExperience,
+  StateMachineExperienceResult
+} from "@motion-mcp/shared-types";
 import { validateProject } from "@motion-mcp/validator";
 
 const server = new McpServer({
@@ -1329,13 +1338,28 @@ async function generateAnimation(
 
   const framework = options.framework ?? planItem.framework;
   const targetAsset = asset ?? assets?.assets.find((candidate) => candidate.id === planItem.assetId);
-  const files = emitForFramework(framework, { planItem: { ...planItem, framework }, asset: targetAsset, options });
+  const sceneArtboard = await sceneForPlanItem(root, planItem, componentId);
+  let files = emitForFramework(framework, {
+    planItem: { ...planItem, framework },
+    asset: targetAsset,
+    options,
+    scene: sceneArtboard
+  });
+  let patchNotes: string[] = [];
+  if (options.patchIntoSource && ["react", "next", "unknown"].includes(framework)) {
+    try {
+      files = await stageImportPatch(root, planItem.file, componentNameFromFiles(files), files);
+      patchNotes = ["AST import patch staged into source file"];
+    } catch (error) {
+      patchNotes = [`AST patch skipped: ${error instanceof Error ? error.message : String(error)}`];
+    }
+  }
   const diffId = stableId("diff", `${componentId}:${nowIso()}`);
   const diff: GeneratedMotionDiff = {
     diffId,
     rootPath: root,
     componentId,
-    summary: `Generated ${framework} motion for ${planItem.file}: ${planItem.interactionIdea}`,
+    summary: `Generated ${framework} motion for ${planItem.file}: ${planItem.interactionIdea}${sceneArtboard ? ` (scene: ${sceneArtboard.artboardId}, ${Object.keys(sceneArtboard.clips).length} clips)` : ""}${patchNotes.length > 0 ? ` [${patchNotes.join("; ")}]` : ""}`,
     framework,
     creditsConsumed: credits,
     validationStatus: {
@@ -1349,6 +1373,72 @@ async function generateAnimation(
   };
   await writeDiff(root, diff);
   return diff;
+}
+
+function componentNameFromFiles(files: FileChange[]): string {
+  const generated = files.find((file) => file.path.includes(".motion-mcp/generated/"));
+  if (!generated) throw new Error("no generated component file found");
+  return path.basename(generated.path, path.extname(generated.path));
+}
+
+async function stageImportPatch(
+  root: string,
+  sourceRelativePath: string,
+  componentName: string,
+  files: FileChange[]
+): Promise<FileChange[]> {
+  const generated = files.find((file) => file.path.includes(".motion-mcp/generated/"));
+  if (!generated) return files;
+  const sourceAbsolute = path.join(root, sourceRelativePath);
+  const original = await fs.readFile(sourceAbsolute, "utf8");
+  const sourceDir = path.dirname(sourceAbsolute);
+  const specifier = toImportSpecifier(sourceDir, path.join(root, path.dirname(generated.path), path.basename(generated.path)));
+  const { ensureImport } = await import("@motion-mcp/ast-patcher");
+  const patched = ensureImport(original, specifier, [componentName]);
+  if (!patched.changed) {
+    return files;
+  }
+  return [
+    ...files,
+    {
+      path: sourceRelativePath,
+      mode: "replace",
+      content: patched.content
+    }
+  ];
+}
+
+function toImportSpecifier(fromDir: string, targetFile: string): string {
+  const withoutExt = targetFile.replace(/\.tsx?$/, "");
+  let rel = path.relative(fromDir, withoutExt).split(path.sep).join("/");
+  if (!rel.startsWith(".")) rel = `./${rel}`;
+  return rel;
+}
+
+/**
+ * Closes the spec-to-code disconnect: if a page state-machine experience
+ * exists for this component, compile it into a SceneDoc artboard so emitters
+ * render real states/transitions/clips instead of the fixed template.
+ */async function sceneForPlanItem(
+  root: string,
+  planItem: MotionPlanResult["plan"][number],
+  componentId: string
+): Promise<ReturnType<typeof compileExperienceToScene> | undefined> {
+  const experience = await loadOptionalJson<StateMachineExperienceResult>(root, "state-machine-experience.json");
+  const pages = experience?.pages ?? [];
+  if (pages.length === 0) return undefined;
+  const normalizedComponentFile = path.basename(planItem.file).toLowerCase();
+  const page =
+    pages.find((candidate) => path.basename(candidate.file).toLowerCase() === normalizedComponentFile) ??
+    pages.find((candidate) => candidate.screenId && candidate.screenId === (planItem as { screenId?: string }).screenId) ??
+    pages.find((candidate) => candidate.codegen.readyForCodegen);
+  if (!page) return undefined;
+  try {
+    void componentId;
+    return compileExperienceToScene(page satisfies PageStateMachineExperience);
+  } catch {
+    return undefined;
+  }
 }
 
 function emitForFramework(
@@ -1480,110 +1570,6 @@ function assetFromSvg(
     semanticLabels,
     sizeBytes: Buffer.byteLength(svg, "utf8")
   };
-}
-
-function parseSvgDimensions(source: string): AssetInfo["dimensions"] {
-  const svgOpen = source.match(/<svg\b([^>]*)>/i)?.[1] ?? "";
-  const attrs = parseAttrs(svgOpen);
-  return {
-    width: toNumber(attrs.width),
-    height: toNumber(attrs.height),
-    viewBox: attrs.viewBox ?? attrs.viewbox
-  };
-}
-
-function parseSvgTree(source: string): SvgNodeInfo[] {
-  const stack: SvgNodeInfo[] = [];
-  const roots: SvgNodeInfo[] = [];
-  let autoId = 0;
-  const tagRegex = /<\/?([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/g;
-  let match: RegExpExecArray | null;
-  while ((match = tagRegex.exec(source))) {
-    const full = match[0] ?? "";
-    const tag = match[1] ?? "";
-    const attrSource = match[2] ?? "";
-    if (full.startsWith("</")) {
-      const index = findLastStackIndex(stack, tag);
-      if (index !== -1) stack.splice(index);
-      continue;
-    }
-    if (!["svg", "g", "path", "circle", "rect", "ellipse", "line", "polyline", "polygon", "text", "defs", "linearGradient", "radialGradient"].includes(tag)) {
-      continue;
-    }
-    const attrs = parseAttrs(attrSource);
-    const node: SvgNodeInfo = {
-      nodeId: attrs.id || `node-${++autoId}`,
-      tag,
-      id: attrs.id,
-      className: attrs.class,
-      attrs,
-      roleGuess: guessRole(tag, attrs),
-      semanticLabel: guessSemanticLabel(tag, attrs),
-      children: []
-    };
-    const parent = stack[stack.length - 1];
-    if (parent) {
-      parent.children.push(node);
-    } else {
-      roots.push(node);
-    }
-    if (!full.endsWith("/>")) stack.push(node);
-  }
-  return roots;
-}
-
-function parseAttrs(source: string): Record<string, string> {
-  const attrs: Record<string, string> = {};
-  const attrRegex = /([A-Za-z_:][A-Za-z0-9_:.-]*)\s*=\s*["']([^"']*)["']/g;
-  let match: RegExpExecArray | null;
-  while ((match = attrRegex.exec(source))) {
-    if (match[1]) attrs[match[1]] = match[2] ?? "";
-  }
-  return attrs;
-}
-
-function guessRole(tag: string, attrs: Record<string, string>): string {
-  const joined = `${attrs.id ?? ""} ${attrs.class ?? ""} ${attrs["data-name"] ?? ""}`.toLowerCase();
-  if (/eye|pupil|iris/.test(joined)) return "eye";
-  if (/mouth|smile|lip/.test(joined)) return "mouth";
-  if (/hand|arm|leg|foot|wing/.test(joined)) return "limb";
-  if (/shadow|shade/.test(joined)) return "shadow";
-  if (/spark|star|shine|glow|flare/.test(joined)) return "sparkle";
-  if (/needle|dial|tick|gauge|orbit/.test(joined)) return "gauge-part";
-  if (/logo|mark|brand/.test(joined)) return "logo-mark";
-  if (/ribbon|energy|wave/.test(joined)) return "energy-ribbon";
-  if (tag === "path") return "shape-path";
-  if (tag === "g") return "group";
-  return tag;
-}
-
-function guessSemanticLabel(tag: string, attrs: Record<string, string>): string {
-  const explicit = attrs.id || attrs["data-name"] || attrs["aria-label"] || attrs.class;
-  if (explicit) {
-    return explicit
-      .replace(/[_]+/g, "-")
-      .replace(/\s+/g, "-")
-      .replace(/--+/g, "-")
-      .toLowerCase();
-  }
-  return guessRole(tag, attrs);
-}
-
-function flattenSvgNodes(node: SvgNodeInfo): SvgNodeInfo[] {
-  return [node, ...node.children.flatMap(flattenSvgNodes)];
-}
-
-function findLastStackIndex(stack: SvgNodeInfo[], tag: string): number {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    if (stack[index]?.tag === tag) return index;
-  }
-  return -1;
-}
-
-function toNumber(raw: string | undefined): number | undefined {
-  if (!raw) return undefined;
-  const parsed = Number.parseFloat(raw);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function slugify(value: string): string {

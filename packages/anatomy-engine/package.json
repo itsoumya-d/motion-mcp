@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Species-aware SVG anatomy detection: classifies parts by name or geometry, matches them to species schemas (human biped, avian crow), and resolves semantic actions into per-anatomy animation queues.",
+  "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

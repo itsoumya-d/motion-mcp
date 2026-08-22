@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Renderer-agnostic motion clip runtime: humanoid skeleton spec, keyframed clips, crossfading player, exercise state machine, and rep counting. Runs on any GPU or CPU.",
+  "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
