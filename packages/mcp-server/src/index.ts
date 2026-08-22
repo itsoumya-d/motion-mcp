@@ -63,7 +63,7 @@ import {
 } from "@motion-mcp/shared-types";
 import { researchStateMachineExperience } from "@motion-mcp/state-machine-researcher";
 import { compileExperienceToScene, type SceneDoc } from "@motion-mcp/scene-graph";
-import { importRiv, toSceneSkeleton } from "@motion-mcp/riv-importer";
+import { extractStructure, importRiv, toSceneSkeleton } from "@motion-mcp/riv-importer";
 import { toAnimatedSvg, toLottie } from "@motion-mcp/exporters";
 import { captureSceneGif, renderSceneFrames, assembleVideo, hasFfmpeg } from "@motion-mcp/capture";
 import type {
@@ -1620,6 +1620,11 @@ async function importRivAsset(
   objectCount: number;
   typeHistogram: Record<string, number>;
   discoveredNames: string[];
+  artboards: Array<{
+    name?: string;
+    animations: Array<{ name?: string; durationMs?: number }>;
+    stateMachines: Array<{ name?: string; layers: number; inputs: string[]; states: (string | undefined)[]; transitions: number }>;
+  }>;
   warnings: string[];
   reportPath: string;
   sceneId?: string;
@@ -1653,6 +1658,20 @@ async function importRivAsset(
     objectCount: result.objects.length,
     typeHistogram: result.typeHistogram,
     discoveredNames: Array.from(new Set(result.strings.map((hit) => hit.value))).slice(0, 12),
+    artboards: extractStructure(result).map((structure) => ({
+      name: structure.name,
+      animations: structure.animations.map((animation) => ({
+        name: animation.name,
+        durationMs: animation.durationMs
+      })),
+      stateMachines: structure.stateMachines.map((machine) => ({
+        name: machine.name,
+        layers: machine.layers.length,
+        inputs: machine.inputs.map((input) => `${input.kind}:${input.name ?? "?"}`),
+        states: machine.layers.flatMap((layer) => layer.states.map((state) => state.animationName ?? state.kind)),
+        transitions: machine.layers.reduce((count, layer) => count + layer.transitions.length, 0)
+      }))
+    })),
     warnings: result.warnings,
     reportPath: path.relative(root, reportPath),
     sceneId: result.ok ? skeleton.sceneId : undefined

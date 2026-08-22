@@ -154,3 +154,104 @@ test("skeleton carries an honest inventory into SceneDoc form", () => {
   assert.equal(inventory.objectCount, 2);
   assert.deepEqual(inventory.strings, ["Hero"]);
 });
+
+// ---------------------------------------------------------------------------
+// v2 structural extraction using real core type keys
+// ---------------------------------------------------------------------------
+
+function tocStructure(): Uint8Array {
+  const keys = concat([
+    varuint(4), varuint(56), varuint(57), varuint(59),
+    varuint(149), varuint(150), varuint(151), varuint(158), varuint(0)
+  ]);
+  // backing types: str,uint,uint,uint,uint,uint,uint,uint -> bits
+  const bytes = Math.ceil(8 / 4);
+  const bits = new Uint8Array(bytes);
+  const types = [1, 0, 0, 0, 0, 0, 0, 0];
+  types.forEach((value, index) => {
+    bits[index >> 2]! |= value << ((index % 4) * 2);
+  });
+  return concat([keys, bits]);
+}
+
+const STRUCTURE_BYTES = concat([
+  header(),
+  tocStructure(),
+  varuint(1),                       // Artboard
+    varuint(4), str("Hero"),
+    varuint(0),
+  varuint(31),                      // LinearAnimation (ctx 0)
+    varuint(4), str("idle"),
+    varuint(56), varuint(60),
+    varuint(57), varuint(120),
+    varuint(59), varuint(1),
+    varuint(0),
+  varuint(53),                      // StateMachine (ctx 1)
+    varuint(4), str("Main"),
+    varuint(0),
+  varuint(57),                      // Layer (ctx 2)
+    varuint(0),
+  varuint(63),                      // EntryState (ctx 3)
+    varuint(0),
+  varuint(61),                      // AnimationState (ctx 4)
+    varuint(149), varuint(0),
+    varuint(0),
+  varuint(65),                      // StateTransition (ctx 5)
+    varuint(150), varuint(3),
+    varuint(151), varuint(4),
+    varuint(158), varuint(30),
+    varuint(0)
+]);
+
+test("extracts real artboards, animations and state-machine topology", () => {
+  const result = importRiv(STRUCTURE_BYTES);
+  assert.equal(result.ok, true);
+  assert.equal(result.objects[0]!.typeName, "Artboard");
+
+  const doc = toSceneSkeleton(result);
+  assert.equal(doc.artboards.length, 1);
+  const artboard = doc.artboards[0]!;
+  assert.equal(artboard.name, "Hero");
+
+  const inventory = (artboard as { rivInventory?: Record<string, unknown> }).rivInventory!;
+  const animations = inventory.animations as Array<{ name?: string; durationMs?: number }>;
+  assert.equal(animations.length, 1);
+  assert.equal(animations[0]!.name, "idle");
+  assert.equal(animations[0]!.durationMs, 2000); // 120 frames @ 60fps
+
+  // Topology lands as a real SceneStateMachine graph.
+  assert.equal(artboard.stateMachines.length, 1);
+  const machine = artboard.stateMachines[0]!;
+  assert.equal(machine.name, "Main");
+  assert.deepEqual(
+    machine.states.map((state) => ({ id: state.stateId, kind: state.kind, name: state.name })),
+    [
+      { id: "riv_3", kind: "entry", name: "entry" },
+      { id: "riv_4", kind: "single", name: "idle" }
+    ]
+  );
+  assert.equal(machine.initialStateId, "riv_3");
+  assert.equal(machine.transitions.length, 1);
+  assert.equal(machine.transitions[0]!.fromStateId, "riv_3");
+  assert.equal(machine.transitions[0]!.toStateId, "riv_4");
+  // Transition timing converts at the documented 60fps approximation: 30 frames -> 500ms
+  assert.equal(machine.transitions[0]!.durationMs, 500);
+
+  // Honest clips: topology without fabricated keyframes.
+  assert.deepEqual(Object.keys(artboard.clips), []);
+});
+
+test("files without recognizable artboards still produce an inventory fallback", () => {
+  const bytes = concat([
+    header(),
+    toc(),
+    varuint(2),
+      varuint(16), str("OrphanString"),
+      varuint(0)
+  ]);
+  const result = importRiv(bytes);
+  const doc = toSceneSkeleton(result, "fallback-name");
+  assert.equal(doc.artboards.length, 1);
+  assert.equal(doc.artboards[0]!.name, "OrphanString");
+  assert.equal(doc.artboards[0]!.stateMachines.length, 0);
+});

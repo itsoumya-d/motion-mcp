@@ -213,7 +213,7 @@ graph TD
 | `emitter-flutter` / `-unity` (β) | AnimationController wrappers / UI pointer behavior, DOTween-ready |
 | `player` | Zero-dep `ScenePlayer` + `<motion-scene>` web component: transitions, deterministic seek, reduced-motion |
 | `exporters` | Lottie JSON writer (bezier paths incl. arc→cubic) · CSS-keyframe animated SVG |
-| `riv-importer` | Rive binary format reader per the public spec — fingerprint, ToC backing types, object stream, graceful truncation |
+| `riv-importer` | Rive binary reader + structural mapper using rive-runtime's core type keys (Artboard=1, LinearAnimation=31, StateMachine=53…) — artboards, animation timing, SM layers/states/transitions |
 | `capture` | PNG decoder (zlib + all scanline filters) · GIF89a encoder (exact/popularity palette, LZW) · ffmpeg MP4/WebM assembly · resvg frame pipeline |
 | `ast-patcher` | Surgical import/usage patches via the TypeScript compiler API |
 | `quiver-provider` | Premium SVG generation with key rotation, backoff, live pricing sync |
@@ -274,7 +274,7 @@ Every generated component ships with: reduced-motion handling, semantic labels, 
 | `generate_animation` | SceneDoc-compiled native motion code (options: `style`, `trigger`, `intensity`, `framework`, `patchIntoSource`, `usageAnchor`) |
 | `preview_animation` / `apply_motion_diff` | Inspect then apply staged diffs with validation |
 | `export_animation` | Bake a SceneDoc state into **Lottie JSON** or self-contained **animated SVG** |
-| `import_riv` | **Migration wedge**: validate any `.riv`, extract its inventory (objects, names, types), stage a SceneDoc skeleton + report |
+| `import_riv` | **Migration wedge**: validate any `.riv`, map its real structure — artboards, animations (name/duration/fps/loop), state machines (layers, states, transitions with timing), inputs — into SceneDoc topology + report |
 | `capture_gif` | Render a SceneDoc state to an animated **GIF** — no browser: headless SVG rasterization + pure-TS GIF89a/LZW encoder |
 | `capture_video` | Same pipeline into **MP4 (H.264)** or **WebM (VP9)** via system ffmpeg |
 | `preview_animation` | Now returns real `snapshotImageBase64` previews of staged diffs (headless render) |
@@ -420,7 +420,7 @@ motion-mcp/
 
 Remaining:
 
-1. Full geometry/state-machine mapping from `.riv` type tables into SceneDoc
+1. Keyframe-level decode from `.riv` (path geometry → SceneDoc clips for full visual fidelity)
 2. Hosted share links for exported artifacts
 
 **Then — Phase C/D: ecosystem**
