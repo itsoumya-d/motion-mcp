@@ -56,6 +56,8 @@ export interface RivObject {
   objectIndex: number;
   /** Ordinal within the current artboard context — matches Rive Id semantics. */
   contextId: number;
+  /** Index of the owning artboard in stream order (-1 before any artboard). */
+  artboardIndex: number;
   typeKey: number;
   typeName?: string;
   properties: RivPropertyEntry[];
@@ -187,6 +189,7 @@ export function importRiv(bytes: Uint8Array): RivImportResult {
   // --- Object stream ------------------------------------------------------
   let objectIndex = 0;
   let contextOrdinal = -1;
+  let artboardIndex = -1;
   while (!reader.outOfData && reader.remaining > 0) {
     const typeKey = reader.varuint();
     if (reader.outOfData) break;
@@ -194,10 +197,14 @@ export function importRiv(bytes: Uint8Array): RivImportResult {
       // Stray terminator — tolerate and continue.
       continue;
     }
-    if (typeKey === 1) contextOrdinal = 0; // new artboard context
+    if (typeKey === 1) {
+      contextOrdinal = 0; // new artboard context
+      artboardIndex += 1;
+    }
     const object: RivObject = {
       objectIndex,
       contextId: Math.max(contextOrdinal, 0),
+      artboardIndex,
       typeKey,
       typeName: KNOWN_TYPE_NAMES[typeKey],
       properties: []

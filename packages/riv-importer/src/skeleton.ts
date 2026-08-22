@@ -6,6 +6,7 @@ import {
   type RivStateMachineStructure,
   type RivTransitionInfo
 } from "./importer.js";
+import { decodeRiv } from "./decode.js";
 
 const FALLBACK_FPS = 60;
 
@@ -57,16 +58,23 @@ export function toSceneSkeleton(result: RivImportResult, fallbackName = "riv-imp
     };
   }
 
+  const decoded = decodeRiv(result);
   const artboards: SceneArtboard[] = structures.map((structure, index) => {
     const machineSummaries = structure.stateMachines.map((machine) => summarizeMachine(machine));
+    const decodedBoard = decoded[index];
+    const clips = { ...(decodedBoard?.clips ?? {}) };
     return {
       artboardId: `riv_${header?.fileId ?? 0}_ab${index}`,
       name: structure.name ?? `${fallbackName}-${index}`,
       experienceSummary:
         `${structure.animations.length} linear animation(s), ` +
-        `${structure.stateMachines.length} state machine(s).`,
+        `${structure.stateMachines.length} state machine(s)` +
+        (clips && Object.keys(clips).length > 0
+          ? `, ${Object.keys(clips).length} keyframed clip(s) decoded`
+          : "") +
+        ".",
       layers: [],
-      clips: {},
+      clips,
       stateMachines: structure.stateMachines
         .map((machine, smIndex) => toSceneStateMachine(machine, smIndex))
         .filter((machine): machine is NonNullable<typeof machine> => machine !== null),
@@ -74,7 +82,11 @@ export function toSceneSkeleton(result: RivImportResult, fallbackName = "riv-imp
       listeners: [],
       audioEvents: [],
       semantics: { reducedMotionSafe: false },
+      sourceSvg: decodedBoard?.sourceSvg,
       rivInventory: {
+        width: decodedBoard?.width,
+        height: decodedBoard?.height,
+        pathCount: decodedBoard?.paths.length ?? 0,
         animations: structure.animations,
         stateMachines: machineSummaries,
         typeHistogram: filteredHistogram(result, index),
@@ -99,14 +111,21 @@ function toSceneStateMachine(
   const layer = machine.layers[0];
   if (!layer || layer.states.length === 0) return null;
 
-  const states: SceneState[] = layer.states.map((state) => ({
-    stateId: `riv_${state.contextId}`,
-    name: state.animationName ?? state.kind,
-    kind: state.kind === "any" ? "any" : state.kind === "exit" ? "exit" : state.kind === "entry" ? "entry" : "single",
-    controlledParts: [],
-    loop: undefined,
-    playbackSpeed: undefined
-  }));
+  const states: SceneState[] = layer.states.map((state) => {
+    const animationName = state.animationName;
+    const clipKey = animationName
+      ? `clip-riv-anim-${animationName.toLowerCase().replace(/[^a-z0-9]+/g, "")}`
+      : undefined;
+    return {
+      stateId: `riv_${state.contextId}`,
+      name: animationName ?? state.kind,
+      kind: state.kind === "any" ? "any" : state.kind === "exit" ? "exit" : state.kind === "entry" ? "entry" : "single",
+      controlledParts: [],
+      loop: undefined,
+      playbackSpeed: undefined,
+      clipId: clipKey
+    };
+  });
 
   const knownIds = new Set(states.map((state) => state.stateId));
   const transitions: SceneTransition[] = layer.transitions

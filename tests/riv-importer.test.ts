@@ -255,3 +255,154 @@ test("files without recognizable artboards still produce an inventory fallback",
   assert.equal(doc.artboards[0]!.name, "OrphanString");
   assert.equal(doc.artboards[0]!.stateMachines.length, 0);
 });
+
+// ---------------------------------------------------------------------------
+// v3: keyframe + geometry decode — imported files become renderable scenes
+// ---------------------------------------------------------------------------
+
+function tocFull(): Uint8Array {
+  // [key, backingType] pairs: 1=string 0=uint 2=float 3=color
+  const spec: Array<[number, number]> = [
+    [4, 1], [5, 0], [7, 2], [8, 2],
+    [13, 2], [14, 2], [24, 2], [25, 2], [37, 3],
+    [51, 0], [52, 0], [53, 0], [56, 0], [57, 0], [59, 0],
+    [67, 0], [68, 0], [70, 2],
+    [71, 0], [72, 0],
+    [84, 2], [85, 2], [86, 2], [87, 2],
+    [149, 0], [150, 0], [151, 0], [158, 0]
+  ];
+  const keys = concat([...spec.map(([key]) => varuint(key)), varuint(0)]);
+  const bytes = Math.ceil(spec.length / 4);
+  const bits = new Uint8Array(bytes);
+  spec.forEach(([, type], index) => {
+    bits[index >> 2]! |= type << ((index % 4) * 2);
+  });
+  return concat([keys, bits]);
+}
+
+const DECODE_BYTES = concat([
+  header(),
+  tocFull(),
+  varuint(1),                                  // Artboard
+    varuint(4), str("Hero"),
+    varuint(7), f32le(100),                    // width
+    varuint(8), f32le(100),                    // height
+    varuint(0),
+  varuint(2),                                  // Node (ctx 0) — animation target
+    varuint(0),
+  varuint(12),                                 // Path (ctx 1), parent = node
+    varuint(5), varuint(0),
+    varuint(0),
+  varuint(5),                                  // StraightVertex (ctx 2)
+    varuint(5), varuint(1),
+    varuint(24), f32le(10),
+    varuint(25), f32le(10),
+    varuint(0),
+  varuint(5),                                  // ctx 3
+    varuint(5), varuint(1),
+    varuint(24), f32le(60),
+    varuint(25), f32le(60),
+    varuint(0),
+  varuint(5),                                  // ctx 4
+    varuint(5), varuint(1),
+    varuint(24), f32le(60),
+    varuint(25), f32le(10),
+    varuint(0),
+  varuint(18),                                 // SolidColor (ctx 5), child of path
+    varuint(5), varuint(1),
+    varuint(37), u32le(0xffcc8811),
+    varuint(0),
+  varuint(31),                                 // LinearAnimation (ctx 6)
+    varuint(4), str("move"),
+    varuint(56), varuint(60),
+    varuint(57), varuint(60),
+    varuint(59), varuint(1),
+    varuint(0),
+  varuint(25),                                 // KeyedObject (ctx 7)
+    varuint(51), varuint(0),
+    varuint(52), varuint(6),
+    varuint(0),
+  varuint(26),                                 // KeyedProperty (ctx 8)
+    varuint(71), varuint(7),
+    varuint(53), varuint(13),
+    varuint(0),
+  varuint(30),                                 // KeyFrameDouble (ctx 9)
+    varuint(72), varuint(8),
+    varuint(67), varuint(0),
+    varuint(70), f32le(0),
+    varuint(0),
+  varuint(30),                                 // KeyFrameDouble (ctx 10)
+    varuint(72), varuint(8),
+    varuint(67), varuint(60),
+    varuint(70), f32le(40),
+    varuint(0),
+  varuint(53),                                 // StateMachine (ctx 11)
+    varuint(4), str("Main"),
+    varuint(0),
+  varuint(57),                                 // Layer (ctx 12)
+    varuint(0),
+  varuint(63),                                 // EntryState (ctx 13)
+    varuint(0),
+  varuint(61),                                 // AnimationState (ctx 14)
+    varuint(149), varuint(6),
+    varuint(0),
+  varuint(65),                                 // StateTransition (ctx 15)
+    varuint(150), varuint(13),
+    varuint(151), varuint(14),
+    varuint(158), varuint(30),
+    varuint(0)
+]);
+
+test("decodes geometry into renderable SVG with real fills", () => {
+  const result = importRiv(DECODE_BYTES);
+  assert.equal(result.ok, true);
+  const doc = toSceneSkeleton(result);
+  const artboard = doc.artboards[0]!;
+  const svg = (artboard as { sourceSvg?: string }).sourceSvg!;
+  assert.ok(svg.includes('viewBox="0 0 100 100"'), "artboard width/height become viewBox");
+  assert.ok(
+    svg.includes('<g id="mcp-1"><path d="M10 10L60 60L60 10Z" fill="#cc8811"/></g>'),
+    `triangle decodes with ARGB fill, got: ${svg}`
+  );
+});
+
+test("decodes keyframes into playable SceneClips wired to state machines", () => {
+  const result = importRiv(DECODE_BYTES);
+  const doc = toSceneSkeleton(result);
+  const artboard = doc.artboards[0]!;
+
+  const clipKeys = Object.keys(artboard.clips);
+  assert.deepEqual(clipKeys, ["clip-riv-anim-move"]);
+  const clip = artboard.clips["clip-riv-anim-move"]!;
+  assert.equal(clip.durationMs, 1000); // 60 frames @ 60fps
+  assert.equal(clip.loop, true);
+
+  const track = clip.tracks.find((candidate) => candidate.property === "translateX")!;
+  assert.equal(track.targetPart, "mcp-0", "tracks target the keyed object's context id");
+  assert.deepEqual(track.keys, [
+    { t: 0, value: 0 },
+    { t: 1000, value: 40 }
+  ]);
+
+  // AnimationState resolves its clip by name — player/capture work end-to-end.
+  const machine = artboard.stateMachines[0]!;
+  const animState = machine.states.find((state) => state.stateId === "riv_14")!;
+  assert.equal(animState.name, "move");
+  assert.equal(animState.clipId, "clip-riv-anim-move");
+  assert.equal(machine.initialStateId, "riv_13");
+});
+
+test("imported .riv scenes flow straight into the capture pipeline", async (t) => {
+  try {
+    await import("@resvg/resvg-js");
+  } catch {
+    return t.skip("@resvg/resvg-js not installed");
+  }
+  const { captureSceneGif } = await import("../packages/capture/src/index.ts");
+  const doc = toSceneSkeleton(importRiv(DECODE_BYTES));
+  // Decoder already attached sourceSvg + clips — no extra wiring needed.
+  const result = await captureSceneGif(doc, { state: "move", fps: 10 });
+  assert.equal(result.frames, 10); // 1000ms clip @ 10fps
+  assert.equal(Buffer.from(result.gif.subarray(0, 6)).toString(), "GIF89a");
+  assert.ok(result.gif.byteLength > 200);
+});

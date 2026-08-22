@@ -1628,6 +1628,7 @@ async function importRivAsset(
   warnings: string[];
   reportPath: string;
   sceneId?: string;
+  renderable: { artboards: number; clips: number };
 }> {
   const absolute = path.resolve(root, filePath);
   const buffer = await fs.readFile(absolute);
@@ -1672,6 +1673,15 @@ async function importRivAsset(
         transitions: machine.layers.reduce((count, layer) => count + layer.transitions.length, 0)
       }))
     })),
+    renderable: {
+      artboards: skeleton.artboards.filter(
+        (artboard) => Boolean((artboard as { sourceSvg?: string }).sourceSvg)
+      ).length,
+      clips: skeleton.artboards.reduce(
+        (count, artboard) => count + Object.keys(artboard.clips).length,
+        0
+      )
+    },
     warnings: result.warnings,
     reportPath: path.relative(root, reportPath),
     sceneId: result.ok ? skeleton.sceneId : undefined
