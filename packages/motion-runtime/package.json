@@ -1,0 +1,19 @@
+{
+  "name": "@motion-mcp/motion-runtime",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Renderer-agnostic motion clip runtime: humanoid skeleton spec, keyframed clips, crossfading player, exercise state machine, and rep counting. Runs on any GPU or CPU.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./fixtures/*.json": "./fixtures/*.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

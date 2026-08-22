@@ -15,6 +15,11 @@ import { scanAssets } from "@motion-mcp/asset-indexer";
 import { autoResearchMotion, type ResearchSourceInput } from "@motion-mcp/auto-researcher";
 import { scanCodebase } from "@motion-mcp/codebase-scanner";
 import {
+  analyzeSvgAnatomy,
+  queueAnimation,
+  resolveAction
+} from "@motion-mcp/anatomy-engine";
+import {
   commitCreditReservation,
   consumeCredits,
   getCreditBalance,
@@ -27,6 +32,7 @@ import { emitReactAnimation } from "@motion-mcp/emitter-react";
 import { emitReactNativeAnimation } from "@motion-mcp/emitter-react-native";
 import { emitUnityAnimation } from "@motion-mcp/emitter-unity";
 import { feedConcept, planMicrointeractions } from "@motion-mcp/motion-planner";
+import { buildWorkoutPlan, EXERCISE_CATALOG } from "@motion-mcp/motion-runtime";
 import {
   QuiverProvider,
   motionCreditsForQuiver,
@@ -127,6 +133,75 @@ server.registerTool(
     const root = resolveRoot(rootPath);
     await consumeCredits(root, { amount: 10, reason: "scan_assets" });
     return jsonResult(await scanAssets(root));
+  }
+);
+
+server.registerTool(
+  "analyze_svg_anatomy",
+  {
+    title: "Analyze SVG anatomy",
+    description:
+      "Species-aware anatomy analysis for an SVG character: detects parts by name or geometry, matches species schemas (human-biped, avian-crow), and reports which actions (blink/wave/flap/caw) the anatomy supports.",
+    inputSchema: {
+      svg: z.string().min(1).describe("Raw SVG source of the character.")
+    }
+  },
+  async ({ svg }) => jsonResult(analyzeSvgAnatomy(svg))
+);
+
+server.registerTool(
+  "resolve_anatomy_action",
+  {
+    title: "Resolve anatomy action",
+    description:
+      "Resolve a semantic action against an SVG's detected anatomy, or queue a full timeline; returns per-node controller steps (scaleY/rotate/translate with node ids) that host code can turn directly into animation.",
+    inputSchema: {
+      svg: z.string().min(1),
+      action: z.string().optional(),
+      timeline: z
+        .array(z.object({ action: z.string(), atMs: z.number().int().nonnegative() }))
+        .optional()
+    }
+  },
+  async ({ svg, action, timeline }) => {
+    const report = analyzeSvgAnatomy(svg);
+    return jsonResult({
+      manifest: report.manifest,
+      parts: report.parts,
+      resolvedAction: action ? resolveAction(report, action) : null,
+      queue: timeline ? queueAnimation(report, timeline) : null,
+      notes: report.notes
+    });
+  }
+);
+
+server.registerTool(
+  "curate_workout",
+  {
+    title: "Curate workout",
+    description:
+      "Compose a deterministic workout plan from the exercise catalog: balanced moves, no consecutive repeats, mobility cool-down at the end. Returns ordered steps with durations that sum exactly to the requested budget.",
+    inputSchema: {
+      totalMinutes: z.number().min(1).max(60).default(10),
+      focus: z
+        .array(z.enum(["strength", "cardio", "mobility"]))
+        .optional()
+        .describe("Restrict the move pool to these categories."),
+      seed: z.number().int().optional().describe("Deterministic variation; same seed, same plan.")
+    }
+  },
+  async ({ totalMinutes, focus, seed }) => {
+    const steps = buildWorkoutPlan({
+      totalMs: Math.round(totalMinutes * 60000),
+      focus,
+      seed
+    });
+    return jsonResult({
+      steps,
+      labels: Object.fromEntries(
+        steps.map((step) => [step.exerciseId, EXERCISE_CATALOG.find((entry) => entry.id === step.exerciseId)?.label ?? step.exerciseId])
+      )
+    });
   }
 );
 
@@ -322,15 +397,17 @@ server.registerTool(
       rootPath: z.string().optional(),
       assetBrief: z.string(),
       placement: AssetPlacementSchema,
-      model: SvgModelSchema
+      model: SvgModelSchema,
+      stylePreset: z.string().optional().describe("Premium style preset id. One of: kids-storybook, soft-toy, flat-sticker, manipulative.")
     }
   },
-  async ({ rootPath, assetBrief, placement, model }) => {
+  async ({ rootPath, assetBrief, placement, model, stylePreset }) => {
     const root = resolveRoot(rootPath);
     return jsonResult(await generatePremiumSvgAsset(root, {
       assetBrief,
       placement,
-      model: model as SvgModelId | undefined
+      model: model as SvgModelId | undefined,
+      stylePreset: stylePreset as StylePresetId | undefined
     }));
   }
 );
@@ -513,6 +590,116 @@ server.registerTool(
   async () => jsonResult(purchaseCreditsUrl())
 );
 
+server.registerTool(
+  "generate_asset_batch",
+  {
+    title: "Generate asset batch",
+    description: "Manifest-driven batch SVG generation. Premium items go through QuiverAI, simple items return host-agent briefs. Supports dryRun for a zero-cost estimate.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      dryRun: z.boolean().default(false).describe("When true, estimate costs and lane decisions without generating or spending credits."),
+      manifest: z.array(z.object({
+        id: z.string().describe("Stable asset id used in reports and downstream wiring."),
+        brief: z.string().describe("What the asset depicts and where it is used."),
+        lane: z.enum(["premium", "simple"]).default("premium"),
+        model: SvgModelSchema,
+        stylePreset: z.string().optional().describe("Premium style preset id. One of: kids-storybook, soft-toy, flat-sticker, manipulative."),
+        placement: AssetPlacementSchema
+      })).min(1).max(64)
+    }
+  },
+  async ({ rootPath, dryRun, manifest }) => {
+    return jsonResult(await runAssetBatch(resolveRoot(rootPath), Boolean(dryRun), manifest));
+  }
+);
+
+type AssetBatchItem = {
+  id: string;
+  brief: string;
+  lane: "premium" | "simple";
+  model?: SvgModelId;
+  stylePreset?: StylePresetId;
+  placement?: AssetPlacement;
+};
+
+async function runAssetBatch(root: string, dryRun: boolean, manifest: Array<Record<string, unknown>>): Promise<unknown> {
+  const results: Array<Record<string, unknown>> = [];
+  let estimatedQuiverCredits = 0;
+  let committedQuiverCredits = 0;
+  for (const raw of manifest) {
+    const item = raw as unknown as AssetBatchItem;
+    try {
+      if (item.lane === "simple") {
+        if (dryRun) {
+          results.push({ id: item.id, lane: "simple", status: "dry-run", motionCredits: 12 });
+        } else {
+          const brief = await buildSimpleSvgBrief(root, {
+            assetBrief: `[${item.id}] ${item.brief}`,
+            placement: item.placement
+          });
+          results.push({
+            id: item.id,
+            lane: "simple",
+            status: "brief-ready",
+            svgPrompt: brief.svgPrompt,
+            acceptanceChecklist: brief.acceptanceChecklist,
+            nextTool: brief.nextTool
+          });
+        }
+        continue;
+      }
+      const model = (item.model ?? selectSvgModel({ prompt: item.brief })) as SvgModelId;
+      const estimate = await estimateMotionCost(root, "generate_svg_asset", undefined, model);
+      if (dryRun) {
+        results.push({
+          id: item.id,
+          lane: "premium",
+          status: "dry-run",
+          model,
+          quiverPricingCredits: estimate.quiverPricingCredits,
+          motionCredits: estimate.motionCredits
+        });
+        estimatedQuiverCredits += estimate.quiverPricingCredits ?? 0;
+        continue;
+      }
+      const generated = await generatePremiumSvgAsset(root, {
+        assetBrief: `${item.brief} The asset must read as a single composition named "${item.id}".`,
+        placement: item.placement ?? { moment: item.id },
+        model,
+        stylePreset: item.stylePreset
+      });
+      results.push({
+        id: item.id,
+        lane: "premium",
+        status: "generated",
+        diffId: generated.diffId,
+        assetId: generated.asset.id,
+        previewUrl: generated.previewUrl,
+        model: generated.model,
+        quiverPricingCredits: generated.quiverPricingCredits
+      });
+      committedQuiverCredits += generated.quiverPricingCredits;
+    } catch (error) {
+      results.push({
+        id: item.id,
+        lane: (raw as { lane?: string }).lane ?? "premium",
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  return {
+    rootPath: root,
+    dryRun,
+    requestedItems: manifest.length,
+    generatedItems: results.filter((item) => item.status === "generated").length,
+    failedItems: results.filter((item) => item.status === "failed").length,
+    estimatedOrSpentQuiverCredits: dryRun ? estimatedQuiverCredits : committedQuiverCredits,
+    results,
+    nextTool: dryRun ? "generate_asset_batch" : "apply_motion_diff"
+  };
+}
+
 async function estimateMotionCost(
   root: string,
   operation: MotionCostEstimate["operation"],
@@ -602,10 +789,12 @@ async function generatePremiumSvgAsset(
     assetBrief: string;
     placement?: AssetPlacement;
     model?: SvgModelId;
+    stylePreset?: StylePresetId;
   }
 ): Promise<GeneratedSvgAssetResult & {
   laneDecision: AssetLaneDecision;
   placement?: string;
+  rigReport: ReturnType<typeof analyzeSvgRig>;
   nextTool: "generate_animation";
 }> {
   const context = await getAppMotionContext(root);
@@ -615,16 +804,23 @@ async function generatePremiumSvgAsset(
     : fallbackPremiumLaneDecision(input.assetBrief);
   const placement = placementLabel(input.placement) || (screenId ? `screen:${screenId}` : undefined);
   const generated = await generateSvgAsset(root, {
-    prompt: premiumSvgPrompt(input.assetBrief, placement, laneDecision, context.motionThesis.personality),
-    instructions: premiumSvgInstructions(placement),
+    prompt: premiumSvgPrompt(input.assetBrief, placement, laneDecision, context.motionThesis.personality, input.stylePreset),
+    instructions: premiumSvgInstructions(placement, input.stylePreset),
     references: [],
     model: input.model ?? laneDecision.recommendedModel,
     n: 1
   });
+  let stagedSvg = "";
+  try {
+    stagedSvg = await fs.readFile(path.join(root, generated.asset.path), "utf8");
+  } catch {
+    stagedSvg = "";
+  }
   return {
     ...generated,
     laneDecision,
     placement,
+    rigReport: analyzeSvgRig(stagedSvg),
     nextTool: "generate_animation"
   };
 }
@@ -644,6 +840,7 @@ async function ingestSvgAsset(
   asset: AssetInfo;
   source: AssetInfo["source"];
   validation: ReturnType<typeof validateIngestableSvg>;
+  rigReport: ReturnType<typeof analyzeSvgRig>;
   motionCreditsReserved: number;
   motionCreditsCommitted: number;
   reservationId: string;
@@ -654,6 +851,7 @@ async function ingestSvgAsset(
   if (!validation.ok) {
     throw new Error(`SVG rejected: ${validation.errors.join(" ")}`);
   }
+  const rigReport = analyzeSvgRig(input.svg);
   const reservation = await reserveCredits(root, {
     amount: input.creditAmount,
     reason: input.creditReason,
@@ -673,6 +871,7 @@ async function ingestSvgAsset(
       asset: staged.asset,
       source: input.source,
       validation,
+      rigReport,
       motionCreditsReserved: reservation.amount,
       motionCreditsCommitted: reservation.amount,
       reservationId: reservation.reservationId,
@@ -750,27 +949,116 @@ function premiumSvgPrompt(
   assetBrief: string,
   placement: string | undefined,
   decision: AssetLaneDecision,
-  personality: string[]
+  personality: string[],
+  stylePreset?: StylePresetId
 ): string {
+  const preset = stylePreset ? STYLE_PRESETS[stylePreset] : undefined;
   return [
     assetBrief,
     placement ? `Placement: ${placement}.` : "Placement: selected app screen.",
     `Motion personality: ${personality.slice(0, 4).join(", ") || "premium, clear, responsive"}.`,
+    preset ? `Style preset (${stylePreset}): ${preset.prompt}` : "",
     `Lane reason: ${decision.reason}`,
     "Create a structured, layered SVG asset for Rive-like host-code animation.",
     "The asset must have semantic ids for each animatable group/path and enough part separation for idle, hover, pressed, active, success, error, and disabled states.",
     "Avoid raster embeds, scripts, external links, and monolithic single-path illustrations."
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 }
 
-function premiumSvgInstructions(placement: string | undefined): string {
+type StylePresetId = keyof typeof STYLE_PRESET_DEFINITIONS;
+
+const STYLE_PRESET_DEFINITIONS = {
+  "kids-storybook": {
+    prompt: "Warm children's storybook illustration: soft rounded shapes, friendly proportions (large heads, big eyes), gentle saturated colors, no sharp edges, no text, no letters, no numbers rendered as glyphs. Ages 3-12 safe: nothing scary, nothing uncanny."
+  },
+  "soft-toy": {
+    prompt: "Plush toy look: fuzzy-soft silhouette, subtle fabric texture suggestion via layered paths, button-like eyes kept friendly, pastel palette with one warm accent. No hard shadows."
+  },
+  "flat-sticker": {
+    prompt: "Flat sticker style: bold clean silhouettes, uniform stroke weight, bright two-to-four color palette per part, white or transparent gap between overlapping parts like a die-cut sticker. No gradients unless asked."
+  },
+  "manipulative": {
+    prompt: "Educational manipulative clarity: each interactive piece visually distinct with high color contrast between parts, chunky geometry readable at small sizes, unambiguous affordance for pressing, sliding, or counting. Used while a child is learning, so no decorative noise."
+  }
+} as const;
+
+const STYLE_PRESETS = STYLE_PRESET_DEFINITIONS;
+
+function premiumSvgInstructions(
+  placement: string | undefined,
+  stylePreset?: StylePresetId
+): string {
+  const preset = stylePreset ? STYLE_PRESETS[stylePreset] : undefined;
   return [
     "Use a valid viewBox and semantic ids on every animatable group/path.",
     "Create distinct primary, accent, shadow, highlight, feedback, and state-specific parts when relevant.",
     "Favor clean part boundaries that can bind to app state properties like isLoading, progress, count, isSelected, hasError, themeColor, avatarImage, and rewardLevel.",
+    "Name character parts by role so rigs can bind them: eyes (both pupils share one group), head-or-body, mouth-or-beak, limb-or-wing, tail-or-tuft, shadow, sparkle.",
+    preset ? `Style constraints: ${preset.prompt}` : "",
     "Keep the SVG self-contained and framework-neutral.",
     placement ? `Optimize the composition for ${placement}.` : "Optimize the composition for the selected app placement."
-  ].join(" ");
+  ].filter(Boolean).join(" ");
+}
+
+/** Character/object rig roles we can bind state machines to, in binding priority order. */
+const RIG_PART_ROLES: Array<{ role: string; pattern: RegExp; binds: string }> = [
+  { role: "eyes", pattern: /(^|[^a-z])(eyes?|pupil|iris|gaze)([^a-z]|$)/i, binds: "eye-follow (pointer tracking), blink (scaleY)" },
+  { role: "head/body", pattern: /(^|[^a-z])(head|face|body|torso|base|core)([^a-z]|$)/i, binds: "tilt, bob, press-depress" },
+  { role: "mouth/beak", pattern: /(^|[^a-z])(mouth|beak|smile|lips?)([^a-z]|$)/i, binds: "speech acknowledgement (scale 1.06)" },
+  { role: "limb/wing", pattern: /(^|[^a-z])(arm|hand|leg|foot|wing|fin)([^a-z]|$)/i, binds: "wave, point-at-hint" },
+  { role: "tail/tuft", pattern: /(^|[^a-z])(tail|tuft|ears?|antenna)([^a-z]|$)/i, binds: "greeting lift (rotate ≤2.5°)" },
+  { role: "shadow", pattern: /(shadow|shade)/i, binds: "grounding scale on hover/press" },
+  { role: "sparkle", pattern: /(spark|star|shine|glow|flare|magic)/i, binds: "success accent, reward pulse" }
+];
+
+/**
+ * Reports which riggable roles an SVG exposes so host code knows which
+ * Rive-like states the asset can support before animation code is generated.
+ */
+export function analyzeSvgRig(svg: string): {
+  ok: boolean;
+  foundRoles: Array<{ role: string; nodeId: string; suggestedBindings: string }>;
+  missingRoles: string[];
+  animatableParts: number;
+  notes: string[];
+} {
+  if (!svg) {
+    return { ok: false, foundRoles: [], missingRoles: RIG_PART_ROLES.map((role) => role.role), animatableParts: 0, notes: ["No SVG source was available for rig analysis."] };
+  }
+  const nodes = parseSvgTree(svg).flatMap(flattenSvgNodes);
+  const named = nodes.filter((node) => Boolean(node.id || node.attrs["data-name"] || node.className));
+  const foundRoles: Array<{ role: string; nodeId: string; suggestedBindings: string }> = [];
+  const missingRoles: string[] = [];
+  for (const candidate of RIG_PART_ROLES) {
+    const match = named.find((node) => {
+      const label = `${node.id ?? ""} ${node.attrs["data-name"] ?? ""} ${node.className ?? ""}`;
+      return candidate.pattern.test(label);
+    });
+    if (match) {
+      foundRoles.push({
+        role: candidate.role,
+        nodeId: match.id ?? match.attrs["data-name"] ?? match.nodeId,
+        suggestedBindings: candidate.binds
+      });
+    } else {
+      missingRoles.push(candidate.role);
+    }
+  }
+  const hasEyes = foundRoles.some((role) => role.role === "eyes");
+  const notes: string[] = [];
+  if (!hasEyes && /character|mascot|creature|animal|bird|face/i.test(svg.slice(0, 2000))) {
+    notes.push("Looks like a character but no eyes part was detected — add a group with id containing 'eyes' for eye-follow interaction.");
+  }
+  if (named.length < 3) {
+    notes.push("Fewer than three named parts; most state machines need at least three.");
+  }
+  return {
+    ok: foundRoles.length >= 2,
+    foundRoles,
+    missingRoles,
+    animatableParts: named.length,
+    notes
+  };
 }
 
 function validateIngestableSvg(svg: string): {
@@ -1382,6 +1670,8 @@ async function startHttpBridge(): Promise<void> {
       return researchStateMachineExperience({ rootPath: root, brief });
     },
     get_app_motion_context: ({ rootPath }) => getAppMotionContext(resolveRoot(rootPath)),
+    generate_asset_batch: async ({ rootPath, dryRun, manifest }) =>
+      runAssetBatch(resolveRoot(rootPath), Boolean(dryRun), manifest ?? []),
     plan_screen_motion: async ({ rootPath, screenId, flowId }) => {
       const root = resolveRoot(rootPath);
       await consumeCredits(root, { amount: 15, reason: "plan_screen_motion" });

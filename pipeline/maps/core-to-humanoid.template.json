@@ -1,0 +1,14 @@
+{
+  "skeleton": "core",
+  "fps": 20,
+  "_comment": "TEMPLATE — fill after inspecting the first ARDY core checkpoint npz. Keys are posed_joints column indices; values are humanoid-17 joint names. Unmapped columns are dropped.",
+  "joints": {
+    "0": "root",
+    "1": "spine",
+    "2": "chest",
+    "3": "neck",
+    "4": "head",
+    "5": "TODO_upperArmL_or_other",
+    "...": "TODO remaining columns"
+  }
+}

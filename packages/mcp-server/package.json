@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.5",
+    "@motion-mcp/anatomy-engine": "workspace:*",
     "@motion-mcp/app-researcher": "workspace:*",
     "@motion-mcp/asset-indexer": "workspace:*",
     "@motion-mcp/auto-researcher": "workspace:*",
@@ -29,6 +30,7 @@
     "@motion-mcp/emitter-react-native": "workspace:*",
     "@motion-mcp/emitter-unity": "workspace:*",
     "@motion-mcp/motion-planner": "workspace:*",
+    "@motion-mcp/motion-runtime": "workspace:*",
     "@motion-mcp/quiver-provider": "workspace:*",
     "@motion-mcp/shared-types": "workspace:*",
     "@motion-mcp/state-machine-researcher": "workspace:*",

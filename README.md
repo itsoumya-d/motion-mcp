@@ -30,6 +30,9 @@ The product rule is simple: work with the existing codebase first. No rewrites. 
 
 - `scan_codebase`
 - `scan_assets`
+- `analyze_svg_anatomy` - species-aware SVG part detection (named or geometry-only) with capability manifest
+- `resolve_anatomy_action` - resolve semantic actions (blink/wave/flap/caw...) against a detected anatomy, or queue a timeline; returns per-node controller steps
+- `curate_workout` - compose a deterministic workout plan (balanced moves, no consecutive repeats, mobility cool-down) that sums exactly to the requested budget
 - `feed_concept`
 - `plan_microinteractions`
 - `auto_research_motion`
@@ -61,7 +64,19 @@ pnpm dev:mcp
 
 During local development, credits are stored in `.motion-mcp/credits.json` with a default local grant.
 
-QuiverAI runs in deterministic mock mode unless `QUIVERAI_API_KEY` is set. Set `MOTION_MCP_QUIVER_MOCK=1` to force mock mode.
+QuiverAI runs in deterministic mock mode unless `QUIVERAI_API_KEY` or `QUIVERAI_API_KEYS` is set. Set `MOTION_MCP_QUIVER_MOCK=1` to force mock mode.
+
+### API key rotation and resilience
+
+- `QUIVERAI_API_KEYS` accepts a comma-separated list of QuiverAI keys. The provider round-robins across them, rotating away from any key that returns 401 (auth), 402 (insufficient credits), or 429 (rate limit).
+- 429 and 5xx responses are retried with exponential backoff (capped at 8s). When the response carries `x-ratelimit-reset`, that deadline is honored instead.
+- Fallback model pricing matches live QuiverAI pricing: `arrow-1.1` = 20 credits, `arrow-1.1-max` = 25 credits.
+
+### Batch generation and rig analysis
+
+- `generate_asset_batch` takes a manifest of up to 64 items (`id`, `brief`, `lane: "premium" | "simple"`, optional `model`, `stylePreset`, `placement`). With `dryRun: true` it returns a zero-cost per-item estimate; without it, premium items are generated through QuiverAI and simple items return host-agent briefs. One failing item never aborts the batch.
+- Premium generation accepts style presets: `kids-storybook`, `soft-toy`, `flat-sticker`, and `manipulative`.
+- Every generated or ingested SVG now ships with a `rigReport`: which character/object roles (`eyes`, `head/body`, `mouth/beak`, `limb/wing`, `tail/tuft`, `shadow`, `sparkle`) were detected by id/data-name, what each can bind to (eye-follow, blink, press-depress, greeting lift...), and which roles are missing. Use it to verify an asset is state-machine-ready before generating animation code.
 
 Production billing defaults:
 
@@ -70,6 +85,21 @@ Production billing defaults:
 - Team: $50/seat/month for 5,000 Motion credits/seat.
 - Topup: $10 for 1,000 Motion credits.
 - Quiver-backed calls reserve `ceil(quiver_pricing_credits * 2)` Motion credits, then commit only after a usable SVG is staged.
+
+## 3D Exercise Stack
+
+- `@motion-mcp/anatomy-engine` - Species-aware SVG anatomy: detects parts by name or geometry, matches them to species schemas (`human-biped`, `avian-crow`), and resolves semantic actions into per-anatomy animation queues. A crow "waves" with wing lift + head bob; a human waves with arms.
+- `@motion-mcp/motion-runtime` - Renderer-agnostic clip player: humanoid skeleton spec, keyframed clips, crossfading base/overlay layers, exercise state machine, and hysteresis rep counting. Zero dependencies; runs on any GPU or CPU.
+- `apps/exercise-demo` - Web studio demo: procedural character playing squat/jumping-jack/curl clips with cheer + form-correction overlays, tempo control, optional BlazePose camera rep counting (CDN-loaded with simulated fallback), and SVG mascots reacting to the same event stream through the anatomy engine.
+- `pipeline/` - Offline baking pipeline (Python): MotionDoc interchange format, RDP keyframe reduction + quantization, batch `bake-library` with manifest, positional retarget solver, ARDY `.npz` adapter. Baked JSON loads directly into the runtime via `clipFromMotionDoc` (the demo's "Squat · baked" button plays pipeline output). See `pipeline/README.md` for the full ARDY-on-Mac setup (gated Llama-3-8B token required once; generation is an overnight batch job, never device-side).
+
+Run the demo:
+
+```bash
+pnpm install
+pnpm build
+pnpm --filter @motion-mcp/exercise-demo dev   # http://localhost:5175
+```
 
 ## Codex Plugin
 

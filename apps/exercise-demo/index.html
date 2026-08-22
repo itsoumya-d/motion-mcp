@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Exercise Studio — motion-mcp</title>
+    <style>
+      :root {
+        --bg: #0b0f14;
+        --panel: #121821;
+        --border: #1e2836;
+        --text: #dbe4ee;
+        --muted: #7d8b9c;
+        --accent: #e8b04b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        min-height: 100vh;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--border);
+      }
+      header h1 { font-size: 17px; margin: 0; letter-spacing: .02em; }
+      .badge {
+        font-size: 11px;
+        color: var(--muted);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 2px 10px;
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 14px;
+        padding: 14px 22px;
+        height: calc(100vh - 61px);
+      }
+      #stage {
+        position: relative;
+        background: radial-gradient(120% 90% at 50% 20%, #16202c 0%, var(--bg) 70%);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        min-height: 320px;
+      }
+      #stage canvas { display: block; }
+      #panel { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+      }
+      .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+      .row { display: flex; align-items: center; gap: 8px; }
+      button {
+        appearance: none;
+        border: 1px solid var(--border);
+        background: #182130;
+        color: var(--text);
+        border-radius: 8px;
+        padding: 7px 12px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: border-color .15s, background .15s;
+      }
+      button:hover { border-color: var(--accent); }
+      button.active { border-color: var(--accent); color: var(--accent); }
+      button.ghost { background: transparent; }
+      .exercise-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+      .reps { display: flex; align-items: baseline; gap: 6px; margin: 12px 0 4px; }
+      .reps span { font-size: 44px; font-weight: 700; color: var(--accent); line-height: 1; }
+      .reps small { color: var(--muted); }
+      #status-line { margin: 6px 0 0; font-size: 13px; color: var(--muted); min-height: 18px; }
+      label.tempo { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-left: auto; }
+      input[type="range"] { width: 90px; accent-color: var(--accent); }
+      video#cam { display: none; width: 100%; border-radius: 8px; margin-top: 10px; }
+      video#cam.active { display: block; }
+      #mascots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      figure.mascot { margin: 0; text-align: center; }
+      figure.mascot figcaption { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+      .art svg { width: 100%; height: 118px; }
+      .hint { font-size: 11px; color: var(--muted); line-height: 1.5; }
+      @media (max-width: 900px) {
+        main { grid-template-columns: 1fr; height: auto; }
+        #stage { height: 52vh; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Exercise Studio</h1>
+      <span class="badge">motion-runtime · anatomy-engine · runs on any GPU or CPU</span>
+    </header>
+    <main>
+      <section id="stage" aria-label="3D exercise stage"></section>
+      <aside id="panel">
+        <div class="card">
+          <h2>Session</h2>
+          <div class="exercise-row">
+            <button class="exercise" data-exercise="squat">Squat</button>
+            <button class="exercise" data-exercise="baked-squat">Squat · baked</button>
+            <button class="exercise" data-exercise="lunge">Lunges</button>
+            <button class="exercise" data-exercise="jumping-jack">Jumping Jacks</button>
+            <button class="exercise" data-exercise="bicep-curl">Curls</button>
+            <button class="exercise" data-exercise="arm-circles">Arm Circles</button>
+          </div>
+          <div class="row">
+            <button id="btn-stop" class="ghost">Stop</button>
+            <button id="btn-workout" class="ghost">Start workout</button>
+            <button id="btn-form" class="ghost">Simulate form warning</button>
+            <label class="tempo">Tempo <input id="tempo" type="range" min="0.5" max="1.5" step="0.05" value="1" /></label>
+          </div>
+          <div class="reps"><span id="rep-count">0</span><small>reps</small></div>
+          <p id="status-line">Idle — pick an exercise to begin</p>
+        </div>
+        <div class="card">
+          <h2>Rep counting</h2>
+          <div class="row">
+            <button id="btn-camera" class="ghost">Enable camera counting</button>
+            <span id="count-source" class="hint">simulated tempo counter active</span>
+          </div>
+          <video id="cam" autoplay muted playsinline></video>
+        </div>
+        <div class="card">
+          <h2>Anatomy mascots</h2>
+          <div id="mascots"></div>
+          <p class="hint">One shared event stream. Each species resolves the event against its own anatomy — wings flap instead of arms waving.</p>
+        </div>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
