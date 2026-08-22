@@ -214,7 +214,7 @@ graph TD
 | `player` | Zero-dep `ScenePlayer` + `<motion-scene>` web component: transitions, deterministic seek, reduced-motion |
 | `exporters` | Lottie JSON writer (bezier paths incl. arc→cubic) · CSS-keyframe animated SVG |
 | `riv-importer` | Rive binary format reader per the public spec — fingerprint, ToC backing types, object stream, graceful truncation |
-| `capture` | PNG decoder (zlib + all scanline filters) · GIF89a encoder (exact/popularity palette, LZW) · resvg frame pipeline |
+| `capture` | PNG decoder (zlib + all scanline filters) · GIF89a encoder (exact/popularity palette, LZW) · ffmpeg MP4/WebM assembly · resvg frame pipeline |
 | `ast-patcher` | Surgical import/usage patches via the TypeScript compiler API |
 | `quiver-provider` | Premium SVG generation with key rotation, backoff, live pricing sync |
 | `credits-ledger` | Reserve → commit/refund credit integrity with local ledger |
@@ -233,7 +233,7 @@ graph TD
 
 Every generated component ships with: reduced-motion handling, semantic labels, controlled/uncontrolled state support, and a host-side state machine you own — nothing phones home at runtime.
 
-## MCP tools (29)
+## MCP tools (30)
 
 **Understand the codebase**
 
@@ -276,6 +276,8 @@ Every generated component ships with: reduced-motion handling, semantic labels, 
 | `export_animation` | Bake a SceneDoc state into **Lottie JSON** or self-contained **animated SVG** |
 | `import_riv` | **Migration wedge**: validate any `.riv`, extract its inventory (objects, names, types), stage a SceneDoc skeleton + report |
 | `capture_gif` | Render a SceneDoc state to an animated **GIF** — no browser: headless SVG rasterization + pure-TS GIF89a/LZW encoder |
+| `capture_video` | Same pipeline into **MP4 (H.264)** or **WebM (VP9)** via system ffmpeg |
+| `preview_animation` | Now returns real `snapshotImageBase64` previews of staged diffs (headless render) |
 | `curate_workout` | Deterministic workout composition for the exercise stack |
 | `get_credit_balance` / `purchase_credits_url` | Credit ops |
 
@@ -286,7 +288,7 @@ Every generated/ingested SVG carries a **rig report**: which roles (`eyes`, `hea
 ## Quality gates: conformance, goldens, determinism
 
 ```bash
-pnpm test          # node --test — 80 assertions across 16 suites
+pnpm test          # node --test — 106 tests across 20 suites
 pnpm typecheck     # strict TS across all 20 packages
 pnpm build         # topological build
 ```
@@ -413,11 +415,13 @@ motion-mcp/
 - ✅ `@motion-mcp/riv-importer`: binary reader per the public `.riv` spec (header, ToC backing-type bits, object stream) + `import_riv` tool
 - ✅ `@motion-mcp/capture`: animated GIF output via headless rasterization — pure-TS LZW/GIF89a, zero browser dependency
 
+- ✅ MP4/WebM assembly on the frame pipeline (`capture_video`, ffmpeg)
+- ✅ Real visual previews: `preview_animation` returns rendered snapshots of staged diffs
+
 Remaining:
 
-1. Playwright visual snapshots for staged diffs
-2. MP4/WebM assembly on top of the existing frame pipeline
-3. Full geometry/state-machine mapping from `.riv` type tables into SceneDoc
+1. Full geometry/state-machine mapping from `.riv` type tables into SceneDoc
+2. Hosted share links for exported artifacts
 
 **Then — Phase C/D: ecosystem**
 

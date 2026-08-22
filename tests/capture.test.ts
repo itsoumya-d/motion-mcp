@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { deflateSync } from "node:zlib";
 import { encodeGif, lzwEncode, decodePng, captureSceneGif } from "../packages/capture/src/index.ts";
+import { renderSceneFrames, assembleVideo, hasFfmpeg } from "../packages/capture/src/index.ts";
 import type { SceneDoc } from "../packages/scene-graph/src/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -273,4 +274,45 @@ test("captureSceneGif rasterizes SceneDoc frames end-to-end", async (t) => {
   assert.equal(result.frames, 4, "400ms at 10fps -> 4 frames");
   assert.ok(result.gif.byteLength > 100, "gif carries real payload");
   assert.equal(Buffer.from(result.gif.subarray(0, 6)).toString(), "GIF89a");
+});
+
+// ---------------------------------------------------------------------------
+// Frames + video assembly
+// ---------------------------------------------------------------------------
+
+test("renderSceneFrames emits deterministic PNG frames", async (t) => {
+  try {
+    await import("@resvg/resvg-js");
+  } catch {
+    return t.skip("@resvg/resvg-js not installed");
+  }
+  const first = await renderSceneFrames(CAPTURE_DOC, { fps: 10 });
+  const second = await renderSceneFrames(CAPTURE_DOC, { fps: 10 });
+  assert.equal(first.frames.length, 4);
+  for (let index = 0; index < first.frames.length; index += 1) {
+    const a = first.frames[index]!.png;
+    const b = second.frames[index]!.png;
+    assert.deepEqual([...a.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    assert.deepEqual([...a], [...b], "frame rendering must be deterministic");
+  }
+});
+
+test("assembleVideo produces MP4 via ffmpeg when available", async (t) => {
+  if (!hasFfmpeg()) return t.skip("ffmpeg not on PATH");
+  const { frames } = await renderSceneFrames(CAPTURE_DOC, { fps: 10 });
+  const mp4 = await assembleVideo({ frames: frames.map((f) => f.png), fps: 10, format: "mp4" });
+  // ISO-BMFF: bytes 4..8 are the 'ftyp' box type
+  assert.equal(Buffer.from(mp4.subarray(4, 8)).toString(), "ftyp", "MP4 starts with ftyp box");
+  assert.ok(mp4.byteLength > 1000, "payload is non-trivial");
+});
+
+test("assembleVideo produces WebM (EBML) via ffmpeg when available", async (t) => {
+  if (!hasFfmpeg()) return t.skip("ffmpeg not on PATH");
+  const { frames } = await renderSceneFrames(CAPTURE_DOC, { fps: 10, maxFrames: 4 });
+  const webm = await assembleVideo({
+    frames: frames.map((f) => f.png),
+    fps: 10,
+    format: "webm"
+  });
+  assert.deepEqual([...webm.subarray(0, 4)], [0x1a, 0x45, 0xdf, 0xa3], "WebM starts with EBML magic");
 });

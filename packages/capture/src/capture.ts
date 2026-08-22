@@ -22,14 +22,29 @@ export interface CaptureResult {
   durationMs: number;
 }
 
+export interface FramePng {
+  /** PNG-encoded raster of this frame. */
+  png: Uint8Array;
+  tMs: number;
+}
+
+export interface FramesResult {
+  frames: FramePng[];
+  width: number;
+  height: number;
+  durationMs: number;
+  fps: number;
+}
+
 /**
- * Renders a SceneClip to an animated GIF without a browser.
- *
- * Each frame is baked into static SVG via the player's deterministic seek,
- * rasterized with resvg (optional peer — install `@resvg/resvg-js`), decoded
- * from PNG, and assembled by the pure-TS GIF89a encoder.
+ * Renders a SceneClip into PNG-encoded frames using the player's
+ * deterministic seek — no browser. Shared by GIF capture, video assembly,
+ * and preview snapshots.
  */
-export async function captureSceneGif(doc: SceneDoc, options: CaptureSceneOptions = {}): Promise<CaptureResult> {
+export async function renderSceneFrames(
+  doc: SceneDoc,
+  options: CaptureSceneOptions = {}
+): Promise<FramesResult> {
   const Resvg = await loadResvg();
 
   const index = options.artboardId
@@ -63,7 +78,7 @@ export async function captureSceneGif(doc: SceneDoc, options: CaptureSceneOption
     // fall back to initial state
   }
 
-  const frames: GifFrameInput[] = [];
+  const frames: FramePng[] = [];
   let width = targetWidth;
   let height = 0;
   for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
@@ -77,16 +92,24 @@ export async function captureSceneGif(doc: SceneDoc, options: CaptureSceneOption
     const decoded = decodePng(new Uint8Array(pngBytes));
     width = decoded.width;
     height = decoded.height;
-    frames.push({ rgba: decoded.rgba, width: decoded.width, height: decoded.height, delayMs: 1000 / fps });
+    frames.push({ png: new Uint8Array(pngBytes), tMs: t });
   }
 
-  return {
-    gif: encodeGif(frames),
-    frames: frames.length,
-    width,
-    height,
-    durationMs: clip.durationMs
-  };
+  return { frames, width, height, durationMs: clip.durationMs, fps };
+}
+
+/**
+ * Renders a SceneClip to an animated GIF without a browser.
+ * Frames come from {@link renderSceneFrames}; assembly is pure TS.
+ */
+export async function captureSceneGif(doc: SceneDoc, options: CaptureSceneOptions = {}): Promise<CaptureResult> {
+  const { frames, width, height, durationMs, fps } = await renderSceneFrames(doc, options);
+  const gifFrames: GifFrameInput[] = frames.map((frame) => {
+    const decoded = decodePng(frame.png);
+    return { rgba: decoded.rgba, width: decoded.width, height: decoded.height, delayMs: 1000 / fps };
+  });
+  if (gifFrames.length === 0) throw new Error("renderSceneFrames produced no frames");
+  return { gif: encodeGif(gifFrames), frames: gifFrames.length, width, height, durationMs };
 }
 
 async function loadResvg(): Promise<typeof import("@resvg/resvg-js").Resvg> {

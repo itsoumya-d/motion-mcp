@@ -65,7 +65,7 @@ import { researchStateMachineExperience } from "@motion-mcp/state-machine-resear
 import { compileExperienceToScene, type SceneDoc } from "@motion-mcp/scene-graph";
 import { importRiv, toSceneSkeleton } from "@motion-mcp/riv-importer";
 import { toAnimatedSvg, toLottie } from "@motion-mcp/exporters";
-import { captureSceneGif } from "@motion-mcp/capture";
+import { captureSceneGif, renderSceneFrames, assembleVideo, hasFfmpeg } from "@motion-mcp/capture";
 import type {
   PageStateMachineExperience,
   StateMachineExperienceResult
@@ -634,6 +634,28 @@ server.registerTool(
     const root = resolveRoot(rootPath);
     await consumeCredits(root, { amount: 5, reason: "capture_gif" });
     return jsonResult(await captureGifAsset(root, { componentId, state, fps, maxFrames, width }));
+  }
+);
+
+server.registerTool(
+  "capture_video",
+  {
+    title: "Capture video",
+    description: "Render a SceneDoc state to MP4 (H.264) or WebM (VP9) via system ffmpeg on top of the same headless frame pipeline as capture_gif.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      componentId: z.string(),
+      format: z.enum(["mp4", "webm"]).default("mp4"),
+      state: z.string().optional(),
+      fps: z.number().optional(),
+      maxFrames: z.number().optional(),
+      width: z.number().optional()
+    }
+  },
+  async ({ rootPath, componentId, format, state, fps, maxFrames, width }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 5, reason: `capture_video:${format}` });
+    return jsonResult(await captureVideoAsset(root, { componentId, format, state, fps, maxFrames, width }));
   }
 );
 
@@ -1549,6 +1571,40 @@ async function captureGifAsset(
   };
 }
 
+interface CaptureVideoParams extends CaptureGifParams {
+  format: "mp4" | "webm";
+}
+
+/** Renders a SceneDoc state to MP4 (H.264) or WebM (VP9) via system ffmpeg. */
+async function captureVideoAsset(
+  root: string,
+  params: CaptureVideoParams
+): Promise<{ exportPath: string; frames: number; format: string; bytes: number }> {
+  const { doc, base } = await loadSceneForAsset(root, params.componentId);
+  const { frames, fps } = await renderSceneFrames(doc, {
+    state: params.state,
+    fps: params.fps,
+    maxFrames: params.maxFrames,
+    width: params.width
+  });
+  const video = await assembleVideo({
+    frames: frames.map((frame) => frame.png),
+    fps,
+    format: params.format
+  });
+  const suffix = params.state ? `.${slugify(params.state)}` : "";
+  const dir = path.join(root, ".motion-mcp", "exports");
+  await fs.mkdir(dir, { recursive: true });
+  const file = path.join(dir, `${base}${suffix}.${params.format}`);
+  await fs.writeFile(file, video);
+  return {
+    exportPath: path.relative(root, file),
+    frames: frames.length,
+    format: params.format,
+    bytes: video.byteLength
+  };
+}
+
 /**
  * Imports a .riv file: validates the Rive binary format, extracts a full
  * content inventory, indexes the asset, and stages a SceneDoc skeleton.
@@ -1949,13 +2005,26 @@ async function startHttpBridge(): Promise<void> {
     import_riv: ({ rootPath, filePath }) => importRivAsset(resolveRoot(rootPath), filePath),
     capture_gif: ({ rootPath, componentId, state, fps, maxFrames, width }) =>
       captureGifAsset(resolveRoot(rootPath), { componentId, state, fps, maxFrames, width }),
+    capture_video: ({ rootPath, componentId, format, state, fps, maxFrames, width }) =>
+      captureVideoAsset(resolveRoot(rootPath), { componentId, format, state, fps, maxFrames, width }),
     apply_motion_diff: ({ rootPath, diffId }) => applyMotionDiff(resolveRoot(rootPath), diffId),
     preview_animation: async ({ rootPath, diffId }) => {
       const root = resolveRoot(rootPath);
       const diff = await readDiff(root, diffId);
+      let snapshotImageBase64 = "";
+      try {
+        // Real visual preview: render the diff's compiled scene deterministically.
+        const { doc } = await loadSceneForAsset(root, diff.componentId);
+        const { frames } = await renderSceneFrames(doc, { maxFrames: 1 });
+        if (frames.length > 0) {
+          snapshotImageBase64 = Buffer.from(frames[0]!.png).toString("base64");
+        }
+      } catch {
+        // Scene not available (e.g., no experience spec yet) — keep empty snapshot.
+      }
       return {
         previewUrl: `file://${path.join(root, ".motion-mcp", "diffs", `${diffId}.json`)}`,
-        snapshotImageBase64: "",
+        snapshotImageBase64,
         summary: diff.summary,
         files: diff.files.map((file) => file.path)
       };
