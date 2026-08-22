@@ -27,3 +27,4 @@ export {
 export type { WorkoutState, WorkoutStep, WorkoutTickResult } from "./workout.js";
 export { buildWorkoutPlan } from "./plan.js";
 export type { PlanOptions } from "./plan.js";
+export { worldJointPositions } from "./fk.js";

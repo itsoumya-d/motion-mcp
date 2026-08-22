@@ -19,3 +19,5 @@ __pycache__/
 .motion-mcp/credits.json
 .motion-mcp/assets.json
 .motion-mcp/scan.json
+.expo/
+.expo-export/

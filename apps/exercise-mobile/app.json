@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Motion Exercise",
+    "slug": "exercise-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0b0f14",
+    "ios": { "supportsTablet": true },
+    "android": { "adaptiveIcon": { "backgroundColor": "#0b0f14" } }
+  }
+}
