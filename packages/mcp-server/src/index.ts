@@ -16,8 +16,10 @@ import { autoResearchMotion, type ResearchSourceInput } from "@motion-mcp/auto-r
 import { scanCodebase } from "@motion-mcp/codebase-scanner";
 import {
   analyzeSvgAnatomy,
+  buildCharacterRig,
   queueAnimation,
-  resolveAction
+  resolveAction,
+  SPECIES_SCHEMAS
 } from "@motion-mcp/anatomy-engine";
 import {
   commitCreditReservation,
@@ -62,15 +64,33 @@ import {
   stableId
 } from "@motion-mcp/shared-types";
 import { researchStateMachineExperience } from "@motion-mcp/state-machine-researcher";
-import { compileExperienceToScene, type SceneDoc } from "@motion-mcp/scene-graph";
+import type { SceneDoc } from "@motion-mcp/scene-graph";
 import { extractStructure, importRiv, toSceneSkeleton } from "@motion-mcp/riv-importer";
 import { toAnimatedSvg, toLottie } from "@motion-mcp/exporters";
 import { captureSceneGif, renderSceneFrames, assembleVideo, hasFfmpeg } from "@motion-mcp/capture";
-import type {
-  PageStateMachineExperience,
-  StateMachineExperienceResult
-} from "@motion-mcp/shared-types";
+import { extractVideoFrames, vectorizeFrames } from "@motion-mcp/vectorizer";
+import { critiqueScene } from "@motion-mcp/critic";
+import type { SceneArtboard } from "@motion-mcp/scene-graph";
+import type { StateMachineExperienceResult } from "@motion-mcp/shared-types";
 import { validateProject } from "@motion-mcp/validator";
+import { animateAppLife } from "./app-life.js";
+import {
+  deriveBindingWiring,
+  eventForProperty,
+  loadStoredBindings,
+  upsertBinding
+} from "./bindings.js";
+import {
+  emitForFramework,
+  loadOptionalJson,
+  readDiff,
+  toUnifiedDiff,
+  upsertIndexedAsset,
+  writeDiff
+} from "./internals.js";
+import { loadSceneForAsset, sceneForPlanItem } from "./scene-source.js";
+import { reviewAnimation } from "./review.js";
+import { importFigmaScene } from "./figma-import.js";
 
 const server = new McpServer({
   name: "motion-mcp",
@@ -96,6 +116,7 @@ const MotionOperationSchema = z.enum([
   "generate_svg_asset",
   "generate_premium_svg_asset",
   "vectorize_asset",
+  "vectorize_video",
   "generate_animation",
   "scan_codebase",
   "scan_assets",
@@ -185,6 +206,52 @@ server.registerTool(
       notes: report.notes
     });
   }
+);
+
+server.registerTool(
+  "rig_asset",
+  {
+    title: "Rig asset",
+    description:
+      "Auto-rig an indexed SVG asset (or raw SVG) into a SceneDoc character rig: bones from detected anatomy, an eye look-at IK chain, and ambient secondary motion (breathe/blink/sway/spring). Every asset receives life — species schemas cover bipeds, birds, quadrupeds, insects, vehicles, and a universal blob fallback.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      componentId: z
+        .string()
+        .optional()
+        .describe("Indexed asset id from scan_assets or an ingestion tool."),
+      svg: z.string().optional().describe("Raw SVG source. Provide this or componentId.")
+    }
+  },
+  async ({ rootPath, componentId, svg }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 6, reason: "rig_asset" });
+    return jsonResult(await rigAsset(root, { componentId, svg }));
+  }
+);
+
+server.registerTool(
+  "list_rig_capabilities",
+  {
+    title: "List rig capabilities",
+    description:
+      "List every species schema the auto-rigger supports (expected parts and resolvable actions per species), including the universal blob fallback that guarantees any SVG can breathe and wobble.",
+    inputSchema: {}
+  },
+  async () =>
+    jsonResult({
+      species: SPECIES_SCHEMAS.map((schema) => ({
+        id: schema.id,
+        label: schema.label,
+        expectedParts: schema.expected,
+        actions: Object.entries(schema.actions).map(([actionId, action]) => ({
+          id: actionId,
+          description: action.description
+        }))
+      })),
+      universalFallback:
+        "Every SVG receives at least a root bone plus breathe secondary motion; the blob schema adds wobble/squish for single-mass characters."
+    })
 );
 
 server.registerTool(
@@ -562,22 +629,13 @@ server.registerTool(
   "preview_animation",
   {
     title: "Preview animation",
-    description: "Return local preview metadata for a generated diff.",
+    description: "Return local preview metadata plus a real rendered frame snapshot for a generated diff.",
     inputSchema: {
       rootPath: z.string().optional(),
       diffId: z.string()
     }
   },
-  async ({ rootPath, diffId }) => {
-    const root = resolveRoot(rootPath);
-    const diff = await readDiff(root, diffId);
-    return jsonResult({
-      previewUrl: `file://${path.join(root, ".motion-mcp", "diffs", `${diffId}.json`)}`,
-      snapshotImageBase64: "",
-      summary: diff.summary,
-      files: diff.files.map((file) => file.path)
-    });
-  }
+  async ({ rootPath, diffId }) => jsonResult(await previewAnimationDiff(resolveRoot(rootPath), diffId))
 );
 
 server.registerTool(
@@ -656,6 +714,166 @@ server.registerTool(
     const root = resolveRoot(rootPath);
     await consumeCredits(root, { amount: 5, reason: `capture_video:${format}` });
     return jsonResult(await captureVideoAsset(root, { componentId, format, state, fps, maxFrames, width }));
+  }
+);
+
+server.registerTool(
+  "animate_app_life",
+  {
+    title: "Animate app life",
+    description:
+      "App-wide ambient-life sweep: gives every indexed SVG asset a living idle presence (breathe/hover/press plus blink, wobble, or reward-pop when anatomy supports it), auto-rigging characters along the way. All generated code is staged into ONE reviewable diff — nothing applies until apply_motion_diff.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      intensity: z.enum(["subtle", "expressive", "hero"]).default("expressive"),
+      scope: z.enum(["all", "characters"]).default("all").describe("characters = assets with at least two detected anatomical roles."),
+      maxComponents: z.number().int().min(1).max(64).default(12)
+    }
+  },
+  async ({ rootPath, intensity, scope, maxComponents }) => {
+    const root = resolveRoot(rootPath);
+    return jsonResult(await animateAppLife(root, { intensity, scope, maxComponents }));
+  }
+);
+
+server.registerTool(
+  "bind_motion_to_state",
+  {
+    title: "Bind motion to state",
+    description:
+      "Bind an animation to real app state (Rive-like data binding): persists a typed property binding for a component. Properties with error/loading/success semantics automatically drive the matching machine input in generated React code (e.g. hasError → error shake, isLoading → active emphasis, isSuccess → reward pop).",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      componentId: z.string().describe("Asset or plan component id."),
+      property: z
+        .string()
+        .describe("App state property name, e.g. hasError, isLoading, progress, count, isSelected."),
+      targetPart: z.string().default("*").describe("Part the property visually drives. Defaults to the whole component."),
+      description: z.string().optional()
+    }
+  },
+  async ({ rootPath, componentId, property, targetPart, description }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 4, reason: `bind_motion_to_state:${property}` });
+    const record = await upsertBinding(root, componentId, {
+      property,
+      targetPart,
+      source: "app-state",
+      description:
+        description ??
+        `${property} drives ${eventForProperty(property) ?? "a pass-through prop consumed by host code"}.`
+    });
+    return jsonResult({
+      ok: true,
+      componentId,
+      bindings: record.bindings,
+      wiring: deriveBindingWiring(record.bindings),
+      updatedAt: record.updatedAt,
+      nextTool: "generate_animation"
+    });
+  }
+);
+
+server.registerTool(
+  "list_motion_bindings",
+  {
+    title: "List motion bindings",
+    description:
+      "List persisted data-binding properties for one component (or every component) and the MotionEvents they drive.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      componentId: z.string().optional()
+    }
+  },
+  async ({ rootPath, componentId }) => {
+    const root = resolveRoot(rootPath);
+    if (componentId) {
+      const stored = await loadStoredBindings(root, componentId);
+      return jsonResult({ componentId, count: stored.length, wiring: deriveBindingWiring(stored), bindings: stored });
+    }
+    const dir = path.join(root, ".motion-mcp", "bindings");
+    let files: string[] = [];
+    try {
+      files = (await fs.readdir(dir)).filter((file) => file.endsWith(".json"));
+    } catch {
+      files = [];
+    }
+    const all = await Promise.all(
+      files.map(async (file) => {
+        const id = file.replace(/\.json$/, "");
+        const stored = await loadStoredBindings(root, id);
+        return { componentId: id, count: stored.length, wiring: deriveBindingWiring(stored) };
+      })
+    );
+    return jsonResult({ components: all });
+  }
+);
+
+server.registerTool(
+  "vectorize_video",
+  {
+    title: "Vectorize video",
+    description:
+      "Convert a video into a vector flipbook animation (Anim8-style video-to-SVG, fully local): ffmpeg extracts frames, median-cut quantization and contour tracing build layered SVG keyframes, temporal reduction collapses identical frames. Stages an indexed, playable SceneDoc asset as a reviewable diff.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      videoPath: z.string().describe("Path to the video file, relative to the project root."),
+      fps: z.number().optional().describe("Sampling fps, 1-60. Default 12."),
+      width: z.number().optional().describe("Downscale frames to this width before tracing."),
+      maxColors: z.number().int().min(2).max(64).optional().describe("Median-cut palette size per frame. Default 16."),
+      maxKeyframes: z.number().int().min(1).max(120).optional().describe("Cap on kept vector keyframes. Default 24.")
+    }
+  },
+  async ({ rootPath, videoPath, fps, width, maxColors, maxKeyframes }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 15, reason: "vectorize_video" });
+    return jsonResult(await vectorizeVideoAsset(root, { videoPath, fps, width, maxColors, maxKeyframes }));
+  }
+);
+
+server.registerTool(
+  "review_animation",
+  {
+    title: "Review animation",
+    description:
+      "Self-verifying quality loop: critiques an asset's compiled scene on two tracks — deterministic structural checks (key order, value bounds, loop seams, micro-jitter, reduced-motion safety) plus a headless render check (static/blank frames) — and returns a scored report with actionable fixes. Run it after generate_animation and before apply_motion_diff.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      diffId: z.string().optional().describe("Review the component referenced by this staged diff."),
+      componentId: z.string().optional().describe("Or review an indexed component directly."),
+      state: z.string().optional().describe("State whose clip to review. Defaults to the machine's initial state."),
+      maxFrames: z.number().int().min(2).max(24).optional().describe("Render samples for raster checks. Default 6.")
+    }
+  },
+  async ({ rootPath, diffId, componentId, state, maxFrames }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 3, reason: "review_animation" });
+    return jsonResult(await reviewAnimation(root, {
+      diffId,
+      componentId,
+      state,
+      maxFrames
+    }));
+  }
+);
+
+server.registerTool(
+  "import_figma_scene",
+  {
+    title: "Import Figma scene",
+    description:
+      "Figma bridge: ingest a snapshot JSON exported by the figma-bridge plugin (apps/figma-bridge) and synthesize a SceneDoc state machine — each connected frame becomes a state, prototype reactions become smart-animate transitions with real easing/duration. Staged as a playable, reviewable diff.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      snapshotPath: z.string().optional().describe("Path to the bridge snapshot JSON, relative to the project root."),
+      snapshot: z.record(z.unknown()).optional().describe("Or pass the parsed snapshot object inline."),
+      name: z.string().optional().describe("Name for the imported component (defaults to the Figma file name).")
+    }
+  },
+  async ({ rootPath, snapshotPath, snapshot, name }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 10, reason: "import_figma_scene" });
+    return jsonResult(await importFigmaScene(root, { snapshotPath, snapshot, name }));
   }
 );
 
@@ -838,6 +1056,7 @@ async function estimateMotionCost(
     generate_animation: 90,
     generate_svg_asset: 50,
     vectorize_asset: 50,
+    vectorize_video: 15,
     validate: 5
   };
   const fixed = fixedByOperation[operation] ?? 90;
@@ -1420,7 +1639,11 @@ async function generateAnimation(
 
   const framework = options.framework ?? planItem.framework;
   const targetAsset = asset ?? assets?.assets.find((candidate) => candidate.id === planItem.assetId);
-  const sceneArtboard = await sceneForPlanItem(root, planItem, componentId);
+  let sceneArtboard = await sceneForPlanItem(root, planItem, componentId);
+  if (sceneArtboard) {
+    const { attachStoredBindings } = await import("./bindings.js");
+    sceneArtboard = await attachStoredBindings(root, componentId, sceneArtboard);
+  }
   let files = emitForFramework(framework, {
     planItem: { ...planItem, framework },
     asset: targetAsset,
@@ -1462,53 +1685,6 @@ interface ExportAnimationParams {
   format: "animated-svg" | "lottie";
   state?: string;
   fps?: number;
-}
-
-/** Shared loader: indexed SVG asset → SceneDoc artboard with sourceSvg attached. */
-async function loadSceneForAsset(
-  root: string,
-  componentId: string
-): Promise<{ doc: SceneDoc; base: string }> {
-  const assets = await loadOptionalJson<AssetIndexResult>(root, "assets.json");
-  const asset = assets?.assets.find((candidate) => candidate.id === componentId);
-  if (!asset || asset.type !== "svg") {
-    throw new Error(`No indexed SVG asset found for ${componentId}. Run scan_assets or generate an asset first.`);
-  }
-
-  let svgSource: string;
-  try {
-    svgSource = await fs.readFile(path.join(root, asset.path), "utf8");
-  } catch {
-    throw new Error(`Asset file missing on disk: ${asset.path}`);
-  }
-
-  const planItem: MotionPlanResult["plan"][number] = {
-    componentId: asset.id,
-    assetId: asset.id,
-    file: asset.path,
-    framework: "next",
-    runtime: ["framer-motion"],
-    interactionIdea: `Export motion for ${asset.path}`,
-    whyItMatters: "",
-    suggestedTrigger: "hover",
-    premiumScore: 0,
-    estimatedCredits: 0,
-    complexity: "low"
-  };
-  const artboard = await sceneForPlanItem(root, planItem, componentId);
-  if (!artboard) {
-    throw new Error(`No compiled scene for ${componentId}. Run research_state_machine_experience first so states exist to export.`);
-  }
-  (artboard as { sourceSvg?: string }).sourceSvg = svgSource;
-
-  const doc: SceneDoc = {
-    formatVersion: 1,
-    sceneId: `scene_${asset.id}`,
-    name: asset.path,
-    createdAt: nowIso(),
-    artboards: [artboard]
-  };
-  return { doc, base: path.basename(asset.path, path.extname(asset.path)) };
 }
 
 /**
@@ -1602,6 +1778,209 @@ async function captureVideoAsset(
     frames: frames.length,
     format: params.format,
     bytes: video.byteLength
+  };
+}
+
+/**
+ * Shared by stdio and HTTP transports: loads a diff, renders its compiled
+ * scene headlessly, and returns preview metadata plus a real frame snapshot.
+ */
+async function previewAnimationDiff(root: string, diffId: string): Promise<{
+  previewUrl: string;
+  snapshotImageBase64: string;
+  summary: string;
+  files: string[];
+}> {
+  const diff = await readDiff(root, diffId);
+  let snapshotImageBase64 = "";
+  try {
+    const { doc } = await loadSceneForAsset(root, diff.componentId);
+    const { frames } = await renderSceneFrames(doc, { maxFrames: 1 });
+    if (frames.length > 0) {
+      snapshotImageBase64 = Buffer.from(frames[0]!.png).toString("base64");
+    }
+  } catch {
+    // Scene not available (e.g., no experience spec yet) — keep empty snapshot.
+  }
+  return {
+    previewUrl: `file://${path.join(root, ".motion-mcp", "diffs", `${diffId}.json`)}`,
+    snapshotImageBase64,
+    summary: diff.summary,
+    files: diff.files.map((file) => file.path)
+  };
+}
+
+/**
+ * Auto-rigs an indexed SVG asset (or raw SVG source) into a SceneDoc
+ * character rig and persists it under .motion-mcp/rigs/ for emitters and
+ * downstream generate_animation calls.
+ */
+async function rigAsset(
+  root: string,
+  input: { componentId?: string; svg?: string }
+): Promise<{
+  ok: boolean;
+  assetId?: string;
+  speciesId: string;
+  matchConfidence: number;
+  capabilities: string[];
+  boneCount: number;
+  ikChains: number;
+  secondaryMotionCount: number;
+  suggestedStates: string[];
+  rigPath?: string;
+  notes: string[];
+  nextTool: "generate_animation";
+}> {
+  let svgSource = input.svg ?? "";
+  let assetId: string | undefined;
+  if (!svgSource) {
+    if (!input.componentId) {
+      throw new Error("rig_asset requires either svg or componentId.");
+    }
+    const assets = await loadOptionalJson<AssetIndexResult>(root, "assets.json");
+    const asset = assets?.assets.find((candidate) => candidate.id === input.componentId);
+    if (!asset || asset.type !== "svg") {
+      throw new Error(`No indexed SVG asset found for ${input.componentId}. Run scan_assets or ingest one first.`);
+    }
+    svgSource = await fs.readFile(path.join(root, asset.path), "utf8");
+    assetId = asset.id;
+  }
+
+  const result = buildCharacterRig(svgSource);
+  const rigRecord = {
+    assetId,
+    speciesId: result.rig.speciesId,
+    matchConfidence: result.rig.matchConfidence,
+    capabilities: result.report.manifest.capabilities.map((capability) => capability.id),
+    suggestedStates: result.suggestedStates,
+    rig: result.rig,
+    createdAt: nowIso()
+  };
+
+  let rigPath: string | undefined;
+  if (assetId) {
+    const rigDir = path.join(root, ".motion-mcp", "rigs");
+    await fs.mkdir(rigDir, { recursive: true });
+    rigPath = path.relative(root, path.join(rigDir, `${assetId}.json`));
+    await fs.writeFile(path.join(root, rigPath), `${JSON.stringify(rigRecord, null, 2)}\n`, "utf8");
+  }
+
+  return {
+    ok: true,
+    assetId,
+    speciesId: result.rig.speciesId ?? "blob",
+    matchConfidence: result.rig.matchConfidence ?? 0,
+    capabilities: rigRecord.capabilities,
+    boneCount: result.rig.bones.length,
+    ikChains: result.rig.ikChains.length,
+    secondaryMotionCount: result.rig.secondaryMotion.length,
+    suggestedStates: result.suggestedStates,
+    rigPath,
+    notes: result.report.notes,
+    nextTool: "generate_animation"
+  };
+}
+
+/**
+ * B1 video→vector: extracts frames with ffmpeg, traces them into layered
+ * SVG keyframes, reduces them temporally, and stages the flipbook as an
+ * indexed, playable asset (SceneDoc + SVG) under .motion-mcp/.
+ */
+async function vectorizeVideoAsset(
+  root: string,
+  input: {
+    videoPath: string;
+    fps?: number;
+    width?: number;
+    maxColors?: number;
+    maxKeyframes?: number;
+  }
+): Promise<{
+  ok: boolean;
+  diffId: string;
+  assetId: string;
+  assetPath: string;
+  scenePath: string;
+  totalFrames: number;
+  keptFrames: number;
+  paletteSize: number;
+  width: number;
+  height: number;
+  frameTimesMs: number[];
+  previewUrl: string;
+  nextTools: string[];
+}> {
+  const absoluteVideo = path.resolve(root, input.videoPath);
+  const hardCap = Math.min((input.maxKeyframes ?? 24) * 8, 480);
+  const frames = await extractVideoFrames(absoluteVideo, {
+    fps: input.fps,
+    width: input.width,
+    hardCap
+  });
+  const result = vectorizeFrames(frames, {
+    fps: input.fps,
+    maxColors: input.maxColors,
+    maxKeyframes: input.maxKeyframes
+  });
+
+  const base = path.basename(input.videoPath, path.extname(input.videoPath));
+  const relativeSvg = `.motion-mcp/generated-assets/${slugify(base)}-flipbook.svg`;
+  const sceneDirRelative = `.motion-mcp/vectorized/${slugify(base)}`;
+  const relativeScene = `${sceneDirRelative}/scene.json`;
+
+  await fs.mkdir(path.join(root, path.dirname(relativeSvg)), { recursive: true });
+  await fs.mkdir(path.join(root, sceneDirRelative), { recursive: true });
+  await fs.writeFile(path.join(root, relativeSvg), result.layeredSvg, "utf8");
+  await fs.writeFile(path.join(root, relativeScene), `${JSON.stringify(result.doc, null, 2)}\n`, "utf8");
+
+  // Attach sourceSvg so capture/preview/export pipelines can play it.
+  (result.doc.artboards[0] as { sourceSvg?: string }).sourceSvg = result.layeredSvg;
+
+  const asset = assetFromSvg(root, relativeSvg, result.layeredSvg, "vectorized");
+  asset.semanticLabels = [...asset.semanticLabels, `flipbook:${result.keptFrames}-keys`];
+  await upsertIndexedAsset(root, asset);
+
+  const diffId = stableId("diff", `vectorize_video:${relativeSvg}:${nowIso()}`);
+  const files: FileChange[] = [
+    { path: relativeSvg, mode: "create", content: `${result.layeredSvg}\n` },
+    { path: relativeScene, mode: "create", content: `${JSON.stringify(result.doc, null, 2)}\n` }
+  ];
+  await writeDiff(root, {
+    diffId,
+    rootPath: root,
+    componentId: asset.id,
+    summary: `Vectorized ${input.videoPath}: ${result.totalFrames} frames → ${result.keptFrames} vector keyframes (${result.paletteSize} colors, ${result.width}x${result.height}).`,
+    framework: "unknown",
+    creditsConsumed: 15,
+    validationStatus: {
+      ok: true,
+      skipped: true,
+      reason: "Generated vector assets are staged; validation runs after apply_motion_diff."
+    },
+    files,
+    unifiedDiff: toUnifiedDiff(files),
+    createdAt: nowIso()
+  });
+
+  const previewPath = path.join(root, ".motion-mcp", "previews", `${diffId}.svg`);
+  await fs.mkdir(path.dirname(previewPath), { recursive: true });
+  await fs.writeFile(previewPath, result.layeredSvg, "utf8");
+
+  return {
+    ok: true,
+    diffId,
+    assetId: asset.id,
+    assetPath: relativeSvg,
+    scenePath: relativeScene,
+    totalFrames: result.totalFrames,
+    keptFrames: result.keptFrames,
+    paletteSize: result.paletteSize,
+    width: result.width,
+    height: result.height,
+    frameTimesMs: result.frameTimesMs,
+    previewUrl: `file://${previewPath}`,
+    nextTools: ["capture_gif", "generate_animation"]
   };
 }
 
@@ -1727,50 +2106,6 @@ function toImportSpecifier(fromDir: string, targetFile: string): string {
   return rel;
 }
 
-/**
- * Closes the spec-to-code disconnect: if a page state-machine experience
- * exists for this component, compile it into a SceneDoc artboard so emitters
- * render real states/transitions/clips instead of the fixed template.
- */async function sceneForPlanItem(
-  root: string,
-  planItem: MotionPlanResult["plan"][number],
-  componentId: string
-): Promise<ReturnType<typeof compileExperienceToScene> | undefined> {
-  const experience = await loadOptionalJson<StateMachineExperienceResult>(root, "state-machine-experience.json");
-  const pages = experience?.pages ?? [];
-  if (pages.length === 0) return undefined;
-  const normalizedComponentFile = path.basename(planItem.file).toLowerCase();
-  const page =
-    pages.find((candidate) => path.basename(candidate.file).toLowerCase() === normalizedComponentFile) ??
-    pages.find((candidate) => candidate.screenId && candidate.screenId === (planItem as { screenId?: string }).screenId) ??
-    pages.find((candidate) => candidate.codegen.readyForCodegen);
-  if (!page) return undefined;
-  try {
-    void componentId;
-    return compileExperienceToScene(page satisfies PageStateMachineExperience);
-  } catch {
-    return undefined;
-  }
-}
-
-function emitForFramework(
-  framework: FrameworkKind,
-  input: Parameters<typeof emitReactAnimation>[0]
-): FileChange[] {
-  if (framework === "next" || framework === "react" || framework === "unknown") {
-    return emitReactAnimation(input);
-  }
-  if (framework === "react-native" || framework === "expo") {
-    return emitReactNativeAnimation(input);
-  }
-  if (framework === "flutter") {
-    return emitFlutterAnimation(input);
-  }
-  if (framework === "unity") {
-    return emitUnityAnimation(input);
-  }
-  return emitReactAnimation(input);
-}
 
 async function applyMotionDiff(root: string, diffId: string): Promise<{
   success: boolean;
@@ -1802,50 +2137,12 @@ async function applyMotionDiff(root: string, diffId: string): Promise<{
   };
 }
 
-async function readDiff(root: string, diffId: string): Promise<GeneratedMotionDiff> {
-  const file = path.join(root, ".motion-mcp", "diffs", `${diffId}.json`);
-  try {
-    return JSON.parse(await fs.readFile(file, "utf8")) as GeneratedMotionDiff;
-  } catch {
-    throw new Error(`Diff ${diffId} was not found. Run generate_animation first.`);
-  }
-}
-
-async function writeDiff(root: string, diff: GeneratedMotionDiff): Promise<void> {
-  const dir = path.join(root, ".motion-mcp", "diffs");
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, `${diff.diffId}.json`), `${JSON.stringify(diff, null, 2)}\n`, "utf8");
-}
-
 async function loadRequiredJson<T>(root: string, filename: string, help: string): Promise<T> {
   const loaded = await loadOptionalJson<T>(root, filename);
   if (!loaded) {
     throw new Error(`${filename} not found. ${help}`);
   }
   return loaded;
-}
-
-async function loadOptionalJson<T>(root: string, filename: string): Promise<T | undefined> {
-  try {
-    return JSON.parse(await fs.readFile(path.join(root, ".motion-mcp", filename), "utf8")) as T;
-  } catch {
-    return undefined;
-  }
-}
-
-async function upsertIndexedAsset(root: string, asset: AssetInfo): Promise<void> {
-  const existing = await loadOptionalJson<AssetIndexResult>(root, "assets.json");
-  const assets = existing?.assets.filter((candidate) => candidate.id !== asset.id) ?? [];
-  assets.push(asset);
-  const result: AssetIndexResult = {
-    rootPath: root,
-    assets,
-    indexPath: path.join(root, ".motion-mcp", "assets.json"),
-    scannedAt: nowIso(),
-    warnings: existing?.warnings ?? []
-  };
-  await fs.mkdir(path.join(root, ".motion-mcp"), { recursive: true });
-  await fs.writeFile(path.join(root, ".motion-mcp", "assets.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
 }
 
 async function recordQuiverUsage(root: string, usage: QuiverUsageRecord): Promise<void> {
@@ -1920,16 +2217,26 @@ function jsonResult(data: unknown) {
   };
 }
 
-function toUnifiedDiff(files: FileChange[]): string {
-  return files
-    .map((file) => {
-      const body = file.content
-        .split(/\r?\n/)
-        .map((line) => `+${line}`)
-        .join("\n");
-      return `--- /dev/null\n+++ b/${file.path}\n@@\n${body}`;
+async function listMotionBindings(root: string, componentId?: string): Promise<unknown> {
+  if (componentId) {
+    const stored = await loadStoredBindings(root, componentId);
+    return { componentId, count: stored.length, wiring: deriveBindingWiring(stored), bindings: stored };
+  }
+  const dir = path.join(root, ".motion-mcp", "bindings");
+  let files: string[] = [];
+  try {
+    files = (await fs.readdir(dir)).filter((file) => file.endsWith(".json"));
+  } catch {
+    files = [];
+  }
+  const all = await Promise.all(
+    files.map(async (file) => {
+      const id = file.replace(/\.json$/, "");
+      const stored = await loadStoredBindings(root, id);
+      return { componentId: id, count: stored.length, wiring: deriveBindingWiring(stored) };
     })
-    .join("\n");
+  );
+  return { components: all };
 }
 
 async function startHttpBridge(): Promise<void> {
@@ -2027,6 +2334,11 @@ async function startHttpBridge(): Promise<void> {
         instructions,
         model
       }),
+    vectorize_video: async ({ rootPath, videoPath, fps, width, maxColors, maxKeyframes }) => {
+      const root = resolveRoot(rootPath);
+      await consumeCredits(root, { amount: 15, reason: "vectorize_video" });
+      return vectorizeVideoAsset(root, { videoPath, fps, width, maxColors, maxKeyframes });
+    },
     generate_animation: ({ rootPath, componentId, options }) =>
       generateAnimation(resolveRoot(rootPath), componentId, options ?? {}),
     export_animation: ({ rootPath, componentId, format, state, fps }) =>
@@ -2036,27 +2348,60 @@ async function startHttpBridge(): Promise<void> {
       captureGifAsset(resolveRoot(rootPath), { componentId, state, fps, maxFrames, width }),
     capture_video: ({ rootPath, componentId, format, state, fps, maxFrames, width }) =>
       captureVideoAsset(resolveRoot(rootPath), { componentId, format, state, fps, maxFrames, width }),
-    apply_motion_diff: ({ rootPath, diffId }) => applyMotionDiff(resolveRoot(rootPath), diffId),
-    preview_animation: async ({ rootPath, diffId }) => {
+    animate_app_life: ({ rootPath, intensity, scope, maxComponents }) =>
+      animateAppLife(resolveRoot(rootPath), { intensity, scope, maxComponents }),
+    bind_motion_to_state: async ({ rootPath, componentId, property, targetPart, description }) => {
       const root = resolveRoot(rootPath);
-      const diff = await readDiff(root, diffId);
-      let snapshotImageBase64 = "";
-      try {
-        // Real visual preview: render the diff's compiled scene deterministically.
-        const { doc } = await loadSceneForAsset(root, diff.componentId);
-        const { frames } = await renderSceneFrames(doc, { maxFrames: 1 });
-        if (frames.length > 0) {
-          snapshotImageBase64 = Buffer.from(frames[0]!.png).toString("base64");
-        }
-      } catch {
-        // Scene not available (e.g., no experience spec yet) — keep empty snapshot.
-      }
+      await consumeCredits(root, { amount: 4, reason: `bind_motion_to_state:${property}` });
+      const record = await upsertBinding(root, componentId, {
+        property,
+        targetPart: targetPart ?? "*",
+        source: "app-state",
+        description:
+          description ??
+          `${property} drives ${eventForProperty(property) ?? "a pass-through prop consumed by host code"}.`
+      });
       return {
-        previewUrl: `file://${path.join(root, ".motion-mcp", "diffs", `${diffId}.json`)}`,
-        snapshotImageBase64,
-        summary: diff.summary,
-        files: diff.files.map((file) => file.path)
+        ok: true,
+        componentId,
+        bindings: record.bindings,
+        wiring: deriveBindingWiring(record.bindings),
+        updatedAt: record.updatedAt,
+        nextTool: "generate_animation"
       };
+    },
+    list_motion_bindings: ({ rootPath, componentId }) =>
+      listMotionBindings(resolveRoot(rootPath), componentId),
+    apply_motion_diff: ({ rootPath, diffId }) => applyMotionDiff(resolveRoot(rootPath), diffId),
+    preview_animation: ({ rootPath, diffId }) => previewAnimationDiff(resolveRoot(rootPath), diffId),
+    rig_asset: async ({ rootPath, componentId, svg }) => {
+      const root = resolveRoot(rootPath);
+      await consumeCredits(root, { amount: 6, reason: "rig_asset" });
+      return rigAsset(root, { componentId, svg });
+    },
+    list_rig_capabilities: async () => ({
+      species: SPECIES_SCHEMAS.map((schema) => ({
+        id: schema.id,
+        label: schema.label,
+        expectedParts: schema.expected,
+        actions: Object.entries(schema.actions).map(([actionId, action]) => ({
+          id: actionId,
+          description: action.description
+        }))
+      })),
+      universalFallback:
+        "Every SVG receives at least a root bone plus breathe secondary motion; the blob schema adds wobble/squish for single-mass characters."
+    }),
+    review_animation: ({ rootPath, diffId, componentId, state, maxFrames }) =>
+      (async () => {
+        const root = resolveRoot(rootPath);
+        await consumeCredits(root, { amount: 3, reason: "review_animation" });
+        return reviewAnimation(root, { diffId, componentId, state, maxFrames });
+      })(),
+    import_figma_scene: async ({ rootPath, snapshotPath, snapshot, name }) => {
+      const root = resolveRoot(rootPath);
+      await consumeCredits(root, { amount: 10, reason: "import_figma_scene" });
+      return importFigmaScene(root, { snapshotPath, snapshot, name });
     },
     get_credit_balance: ({ rootPath }) => getCreditBalance(resolveRoot(rootPath)),
     purchase_credits_url: async () => purchaseCreditsUrl()

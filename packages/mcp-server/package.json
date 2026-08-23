@@ -28,11 +28,13 @@
     "@motion-mcp/capture": "workspace:*",
     "@motion-mcp/codebase-scanner": "workspace:*",
     "@motion-mcp/credits-ledger": "workspace:*",
+    "@motion-mcp/critic": "workspace:*",
     "@motion-mcp/emitter-flutter": "workspace:*",
     "@motion-mcp/emitter-react": "workspace:*",
     "@motion-mcp/emitter-react-native": "workspace:*",
     "@motion-mcp/emitter-unity": "workspace:*",
     "@motion-mcp/exporters": "workspace:*",
+    "@motion-mcp/figma-bridge": "workspace:*",
     "@motion-mcp/motion-planner": "workspace:*",
     "@motion-mcp/motion-runtime": "workspace:*",
     "@motion-mcp/quiver-provider": "workspace:*",
@@ -42,6 +44,7 @@
     "@motion-mcp/state-machine-researcher": "workspace:*",
     "@motion-mcp/svg-parser": "workspace:*",
     "@motion-mcp/validator": "workspace:*",
+    "@motion-mcp/vectorizer": "workspace:*",
     "zod": "^3.24.1"
   }
 }

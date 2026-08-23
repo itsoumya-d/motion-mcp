@@ -66,6 +66,7 @@ export type MotionOperation =
   | "generate_animation"
   | "generate_svg_asset"
   | "vectorize_asset"
+  | "vectorize_video"
   | "validate";
 
 export type MotionState =
