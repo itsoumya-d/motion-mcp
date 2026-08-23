@@ -1,0 +1,23 @@
+{
+  "name": "@motion-mcp/critic",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Deterministic motion critique: structural SceneDoc checks (key order, value bounds, loop seams, stagger rhythm, reduced-motion safety) plus headless raster checks (static/blank renders), scored reports with actionable fixes and safe auto-fixes.",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@motion-mcp/capture": "workspace:*",
+    "@motion-mcp/scene-graph": "workspace:*"
+  }
+}
