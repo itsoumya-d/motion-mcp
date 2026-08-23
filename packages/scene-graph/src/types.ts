@@ -48,6 +48,48 @@ export interface SceneArtboard {
   listeners: MotionListener[];
   audioEvents: SceneAudioEvent[];
   semantics?: SceneSemantics;
+  /** Optional character rig (SceneDoc v1 extension — backward compatible). */
+  rig?: SceneRig;
+}
+
+/**
+ * Character-rig block. Emitted by the auto-rigger (anatomy-engine) and
+ * consumed by emitters/runtimes that support skeletal driving.
+ */
+export interface SceneRig {
+  speciesId?: string;
+  matchConfidence?: number;
+  bones: SceneBone[];
+  ikChains: SceneIkChain[];
+  secondaryMotion: SceneSecondaryMotion[];
+}
+
+export interface SceneBone {
+  boneId: string;
+  name: string;
+  parentBoneId?: string;
+  /** Part ids this bone drives. */
+  targetParts: string[];
+  /** Joint origin in artboard coordinates. */
+  origin: { x: number; y: number };
+  length?: number;
+  restRotationDeg?: number;
+}
+
+export interface SceneIkChain {
+  chainId: string;
+  name: string;
+  boneIds: string[];
+  targetPart: string;
+  hint?: "two-bone" | "look-at";
+}
+
+export interface SceneSecondaryMotion {
+  partId: string;
+  kind: "breathe" | "sway" | "bob" | "blink" | "follow" | "spring";
+  amount: number;
+  periodMs: number;
+  phaseMs?: number;
 }
 
 export interface SceneLayer {
