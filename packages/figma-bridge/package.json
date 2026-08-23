@@ -1,0 +1,22 @@
+{
+  "name": "@motion-mcp/figma-bridge",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Figma bridge model: turns the figma-bridge plugin's plain-JSON snapshot (frames, elements, prototype reactions) into SceneDoc state machines with smart-animate pose tweens.",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@motion-mcp/scene-graph": "workspace:*"
+  }
+}
