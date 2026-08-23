@@ -264,7 +264,8 @@ function tocFull(): Uint8Array {
   // [key, backingType] pairs: 1=string 0=uint 2=float 3=color
   const spec: Array<[number, number]> = [
     [4, 1], [5, 0], [7, 2], [8, 2],
-    [13, 2], [14, 2], [24, 2], [25, 2], [37, 3],
+    [13, 2], [14, 2], [20, 2], [21, 2], [24, 2], [25, 2], [31, 2], [37, 3],
+    [82, 2], [83, 2],
     [51, 0], [52, 0], [53, 0], [56, 0], [57, 0], [59, 0],
     [67, 0], [68, 0], [70, 2],
     [71, 0], [72, 0],
@@ -350,6 +351,41 @@ const DECODE_BYTES = concat([
     varuint(150), varuint(13),
     varuint(151), varuint(14),
     varuint(158), varuint(30),
+    varuint(0),
+  varuint(4),                                  // Ellipse (ctx 16), child of node
+    varuint(5), varuint(0),
+    varuint(20), f32le(30),
+    varuint(21), f32le(24),
+    varuint(0),
+  varuint(7),                                  // Rectangle (ctx 17)
+    varuint(5), varuint(0),
+    varuint(20), f32le(20),
+    varuint(21), f32le(20),
+    varuint(31), f32le(6),
+    varuint(0),
+  varuint(12),                                 // Path (ctx 18) for cubics
+    varuint(5), varuint(0),
+    varuint(0),
+  varuint(35),                                 // CubicMirrored (ctx 19)
+    varuint(5), varuint(18),
+    varuint(24), f32le(20),
+    varuint(25), f32le(80),
+    varuint(82), f32le(0),
+    varuint(83), f32le(15),
+    varuint(0),
+  varuint(35),                                 // ctx 20
+    varuint(5), varuint(18),
+    varuint(24), f32le(45),
+    varuint(25), f32le(95),
+    varuint(82), f32le(0),
+    varuint(83), f32le(15),
+    varuint(0),
+  varuint(35),                                 // ctx 21
+    varuint(5), varuint(18),
+    varuint(24), f32le(70),
+    varuint(25), f32le(80),
+    varuint(82), f32le(0),
+    varuint(83), f32le(15),
     varuint(0)
 ]);
 
@@ -361,7 +397,7 @@ test("decodes geometry into renderable SVG with real fills", () => {
   const svg = (artboard as { sourceSvg?: string }).sourceSvg!;
   assert.ok(svg.includes('viewBox="0 0 100 100"'), "artboard width/height become viewBox");
   assert.ok(
-    svg.includes('<g id="mcp-1"><path d="M10 10L60 60L60 10Z" fill="#cc8811"/></g>'),
+    svg.includes('<g id="mcp-1" fill="#cc8811"><path d="M10 10L60 60L60 10Z"/></g>'),
     `triangle decodes with ARGB fill, got: ${svg}`
   );
 });
@@ -405,4 +441,106 @@ test("imported .riv scenes flow straight into the capture pipeline", async (t) =
   assert.equal(result.frames, 10); // 1000ms clip @ 10fps
   assert.equal(Buffer.from(result.gif.subarray(0, 6)).toString(), "GIF89a");
   assert.ok(result.gif.byteLength > 200);
+});
+
+test("parametric shapes and mirrored cubic vertices decode into SVG", () => {
+  const result = importRiv(DECODE_BYTES);
+  const doc = toSceneSkeleton(result);
+  const svg = (doc.artboards[0] as { sourceSvg?: string }).sourceSvg!;
+
+  // Ellipse centered on its parent node position (defaults 0,0)
+  assert.ok(
+    svg.includes('<ellipse cx="0" cy="0" rx="15" ry="12"/>'),
+    "ellipse decoded: " + svg
+  );
+  // Rounded rectangle
+  assert.ok(svg.includes('<rect x="-10" y="-10" width="20" height="20" rx="6" ry="6"/>'), "rounded rect");
+  // Mirrored cubic handles: collinear opposite directions along rotation 0deg
+  assert.ok(
+    svg.includes('<path d="M20 80C35 80 30 95 45 95C60 95 55 80 70 80Z"/>'),
+    "mirrored cubics: " + svg
+  );
+});
+
+// --- Gradient paint decoding (B3) -------------------------------------------
+// Fabricated RivImportResult graphs — decodeRiv consumes the parsed result
+// directly, so official rive-runtime core ids can be exercised without
+// hand-encoding binaries.
+
+import { decodeRiv } from "../packages/riv-importer/src/decode.ts";
+
+type Prop = { key: number; value: { kind: string; value: unknown } };
+
+function obj(
+  contextId: number,
+  typeKey: number,
+  properties: Array<[number, unknown, string?]>,
+  artboardIndex = 0
+): import("../packages/riv-importer/src/importer.ts").RivObject {
+  return {
+    objectIndex: contextId,
+    contextId,
+    artboardIndex,
+    typeKey,
+    properties: properties.map(([key, value, kind]) => ({
+      key,
+      value: { kind: kind ?? (typeof value === "string" ? "string" : typeof value === "number" ? "float" : "uint"),
+        value }
+    })) as Prop[]
+  };
+}
+
+function gradientResult(): import("../packages/riv-importer/src/importer.ts").RivImportResult {
+  // ids: 1=artboard 2=shape 3=path 4..5=vertices 6=fill 7=linearGradient 8,9=stops
+  const objects = [
+    obj(1, 1, [[4, "gradboard", "string"], [7, 200], [8, 120]]),
+    obj(2, 3, [[5, -1]]),                       // shape, parent artboard(-1)
+    obj(3, 12, [[5, 2]]),                       // path in shape
+    obj(4, 5, [[5, 3], [24, 10], [25, 10]]),    // vertex A
+    obj(5, 5, [[5, 3], [24, 110], [25, 90]]),   // vertex B
+    obj(6, 20, [[5, 2]]),                       // fill on shape
+    // LinearGradient(22): startX=0 startY=0 endX=100 endY=100
+    obj(7, 22, [[5, 6], [42, 0], [33, 0], [34, 100], [35, 100]]),
+    obj(8, 19, [[5, 7], [38, 0xffff0000, "color"], [39, 0]]),
+    obj(9, 19, [[5, 7], [38, 0x800000ff, "color"], [39, 1]])
+  ];
+  return {
+    ok: true,
+    propertyTable: [],
+    objects,
+    strings: [],
+    typeHistogram: {},
+    warnings: []
+  };
+}
+
+test("linear gradient fills decode into shared defs with sorted stops", () => {
+  const [artboard] = decodeRiv(gradientResult());
+  const svg = artboard!.sourceSvg;
+
+  assert.match(svg, /<defs><linearGradient id="mcp-grad-7" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="100">/);
+  assert.match(svg, /<stop offset="0" stop-color="#ff0000"/);
+  assert.match(svg, /<stop offset="1" stop-color="#0000ff80"/);
+  assert.match(svg, /<\/linearGradient><\/defs>/);
+  assert.match(svg, /<g id="mcp-3"[^>]*fill="url\(#mcp-grad-7\)"/);
+});
+
+test("radial gradients derive radius from the start-end distance", () => {
+  const result = gradientResult();
+  result.objects = result.objects.map((entry) =>
+    entry.typeKey === 22 ? { ...entry, typeKey: 17 } : entry
+  );
+  const [artboard] = decodeRiv(result);
+  const svg = artboard!.sourceSvg;
+  // radius = hypot(100, 100) ≈ 141.42
+  assert.match(svg, /<radialGradient id="mcp-grad-7" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="141\.4214"/);
+});
+
+test("stroke paints can reference gradients too", () => {
+  const result = gradientResult();
+  result.objects = result.objects.filter((entry) => entry.contextId !== 6);
+  result.objects.push(obj(6, 24, [[5, 2], [47, 3]])); // stroke instead of fill
+  const [artboard] = decodeRiv(result);
+  const svg = artboard!.sourceSvg;
+  assert.match(svg, /stroke="url\(#mcp-grad-7\)" stroke-width="3"/);
 });
