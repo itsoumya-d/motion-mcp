@@ -7,6 +7,7 @@ export type PartRole =
   | "leg"
   | "tail"
   | "body"
+  | "wheel"
   | "shadow"
   | "sparkle";
 
@@ -38,7 +39,7 @@ export interface DetectedPart {
   pairIndex?: number;
 }
 
-export type ControllerKind = "scaleY" | "rotate" | "translateY" | "translateX";
+export type ControllerKind = "scaleY" | "scaleX" | "rotate" | "translateY" | "translateX";
 
 export interface ControllerStep {
   role: PartRole;
@@ -64,6 +65,7 @@ export interface ExpectedParts {
   leg?: number;
   tail?: number;
   body?: number;
+  wheel?: number;
 }
 
 export interface SpeciesSchema {

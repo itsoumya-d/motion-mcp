@@ -140,14 +140,21 @@ const CAPABILITY_DEFS: Array<{
   speciesOnly?: string[];
 }> = [
   { id: "blink", label: "Blink", alternatives: [[{ role: "eyes", min: 1 }]] },
-  { id: "breathe", label: "Idle breathe", alternatives: [[{ role: "head", min: 1 }]] },
+  { id: "breathe", label: "Idle breathe", alternatives: [[{ role: "head", min: 1 }], [{ role: "body", min: 1 }]] },
   { id: "nod", label: "Nod", alternatives: [[{ role: "head", min: 1 }]] },
   { id: "wave", label: "Wave or greeting lift", alternatives: [[{ role: "arm", min: 1 }], [{ role: "wing", min: 1 }]] },
   { id: "flap", label: "Wing flap", alternatives: [[{ role: "wing", min: 2 }]] },
+  { id: "buzz", label: "Wing buzz", alternatives: [[{ role: "wing", min: 1 }]], speciesOnly: ["insect"] },
+  { id: "crawl", label: "Leg crawl", alternatives: [[{ role: "leg", min: 1 }]], speciesOnly: ["insect"] },
   { id: "caw", label: "Beak caw", alternatives: [[{ role: "mouth", min: 1 }]], speciesOnly: ["avian-crow"] },
   { id: "tailFlick", label: "Tail flick", alternatives: [[{ role: "tail", min: 1 }]] },
+  { id: "tailWag", label: "Tail wag", alternatives: [[{ role: "tail", min: 1 }]], speciesOnly: ["generic-quadruped"] },
+  { id: "trot", label: "Trot", alternatives: [[{ role: "leg", min: 2 }]], speciesOnly: ["generic-quadruped"] },
   { id: "squat", label: "Squat rep", alternatives: [[{ role: "leg", min: 1 }]], speciesOnly: ["human-biped"] },
-  { id: "hop", label: "Hop", alternatives: [[{ role: "leg", min: 1 }]] }
+  { id: "hop", label: "Hop", alternatives: [[{ role: "leg", min: 1 }]] },
+  { id: "roll", label: "Wheel roll", alternatives: [[{ role: "wheel", min: 1 }]], speciesOnly: ["vehicle"] },
+  { id: "bounce", label: "Suspension bounce", alternatives: [[{ role: "wheel", min: 1 }], [{ role: "body", min: 1 }]], speciesOnly: ["vehicle"] },
+  { id: "wobble", label: "Jelly wobble (universal)", alternatives: [[{ role: "body", min: 1 }]] }
 ];
 
 function deriveCapabilities(countBy: Partial<Record<PartRole, number>>, speciesId: string): Capability[] {

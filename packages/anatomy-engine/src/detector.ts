@@ -2,14 +2,15 @@ import { flattenSvgNodes, nodeBBox, parseSvg } from "./svg-parse.js";
 import type { BBox, DetectedPart, PartRole, SvgNode } from "./types.js";
 
 const ROLE_NAME_PATTERNS: Array<{ role: PartRole; pattern: RegExp }> = [
-  { role: "eyes", pattern: /(^|[^a-z])(eyes?|pupils?|iris|gaze|eyelids?)([^a-z]|$)/i },
+  { role: "eyes", pattern: /(^|[^a-z])(eyes?|pupils?|iris|gaze|eyelids?|headlights?)([^a-z]|$)/i },
+  { role: "wheel", pattern: /(^|[^a-z])(wheels?|tyres?|tires?)([^a-z]|$)/i },
   { role: "wing", pattern: /(^|[^a-z])(wings?|fins?)([^a-z]|$)/i },
   { role: "arm", pattern: /(^|[^a-z])(arms?|hands?|paws?)([^a-z]|$)/i },
   { role: "leg", pattern: /(^|[^a-z])(legs?|feet|foot|claws?|talons?)([^a-z]|$)/i },
   { role: "tail", pattern: /(^|[^a-z])(tails?|tuft)([^a-z]|$)/i },
   { role: "mouth", pattern: /(^|[^a-z])(mouths?|beaks?|bills?|smiles?|lips?)([^a-z]|$)/i },
-  { role: "head", pattern: /(^|[^a-z])(heads?|face)([^a-z]|$)/i },
-  { role: "body", pattern: /(^|[^a-z])(torsos?|trunks?|bod(?:y|ies)|chest|belly)([^a-z]|$)/i },
+  { role: "head", pattern: /(^|[^a-z])(heads?|face|cab)([^a-z]|$)/i },
+  { role: "body", pattern: /(^|[^a-z])(torsos?|trunks?|bod(?:y|ies)|chest|belly|chassis|shell)([^a-z]|$)/i },
   { role: "shadow", pattern: /(shadow|shade)/i },
   { role: "sparkle", pattern: /(spark|star|shine|glow|flare|magic)/i }
 ];
@@ -93,7 +94,7 @@ function isAncestorOf(candidate: SvgNode, target: SvgNode): boolean {
 }
 
 function pairSideKey(role: PartRole, nodeId: string): { side: "left" | "right"; opposite: "right" | "left" } | null {
-  if (!["eyes", "arm", "wing", "leg"].includes(role)) return null;
+  if (!["eyes", "arm", "wing", "leg", "wheel"].includes(role)) return null;
   const lower = nodeId.toLowerCase();
   if (/left|(^|[^a-z])l([-_ ]|$)/.test(lower)) return { side: "left", opposite: "right" };
   if (/right|(^|[^a-z])r([-_ ]|$)/.test(lower)) return { side: "right", opposite: "left" };
