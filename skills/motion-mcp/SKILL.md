@@ -18,10 +18,13 @@ Use this skill when the user wants to add premium motion, animated SVGs, Rive/Lo
 7. Call `plan_screen_motion` for the relevant screen or flow and show the top high-leverage moments.
 8. For a needed asset, call `estimate_asset_lane`.
 9. If the lane is simple, call `generate_simple_svg_asset` without SVG first, generate the SVG with the host coding model from the returned strict prompt, then call `ingest_svg_asset`.
-10. If the lane is premium, call `list_svg_models`, `estimate_motion_cost`, then `generate_premium_svg_asset`. Use `vectorize_asset` for existing raster assets.
-11. Call `generate_animation` for the approved asset or plan item.
-12. Run `preview_animation` and summarize the diff.
-13. Call `apply_motion_diff` only after approval.
+10. If the lane is premium, call `list_svg_models`, `estimate_motion_cost`, then `generate_premium_svg_asset`. Use `vectorize_asset` for existing raster assets. Use `vectorize_video` to turn a short video (mp4/mov/webm) into a vector flipbook animation — fully local, no AI credits beyond staging.
+11. For character or mascot assets, call `rig_asset` to auto-rig the SVG (bones, eye look-at IK, breathe/blink secondary motion). Every asset qualifies — the universal blob fallback guarantees life even for single-shape art. Use `list_rig_capabilities` to see which species schemas and actions are supported.
+12. To make animation react to app state, call `bind_motion_to_state` per property (e.g. `hasError`, `isLoading`, `progress`). Bound properties become a typed `data` prop on generated React components and drive machine inputs automatically.
+13. To bring idle life to every surface at once, call `animate_app_life` — it rigs, compiles ambient state machines (idle breathe / hover lift / press squash), and stages one reviewable diff for all indexed assets.
+14. Call `generate_animation` for the approved asset or plan item.
+15. Run `preview_animation` and summarize the diff. Then call `review_animation` (diffId) — if it reports failures, apply its `fixes` guidance, regenerate, and review again until it passes.
+16. Call `apply_motion_diff` only after approval.
 
 ## Principles
 

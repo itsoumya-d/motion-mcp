@@ -5,7 +5,7 @@
 **The AI-native motion engine for coding agents — a codebase-aware alternative to Rive's closed pipeline.**
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen.svg)](./tests)
+[![Tests](https://img.shields.io/badge/tests-154%20passing-brightgreen.svg)](./tests)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg)](https://www.typescriptlang.org/)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-native-8A2BE2.svg)](https://modelcontextprotocol.io)
 [![Targets](https://img.shields.io/badge/targets-React_·_RN_·_Flutter_·_Unity-ff69b4.svg)](#what-it-builds)
@@ -35,12 +35,36 @@ Rive treats AI as an operator of a human-centric editor. Motion MCP deletes the 
 
 ---
 
+## How this differs from Anim8 and Rive MCP
+
+Two other tools define this space. **Anim8** (tryanim8.com) is a manual, browser-based keyframe editor — Figma Motion import in, MP4/animated-SVG out. No AI generation, no state machines, no MCP. **Rive's MCP ecosystem** (official Rive MCP, plus the third-party 139-tool RiveMCP) makes an agent a *tool executor* over Rive's editor: it builds whatever you specify — scenes, state machines, data binding — but RiveMCP states plainly that it "won't draw original illustrations… an animation engineer, not an illustrator."
+
+Motion MCP's wedge is the pieces neither ships:
+
+| Capability | Anim8 | Rive MCP / RiveMCP | Motion MCP |
+|---|---|---|---|
+| Manual keyframe editing | ✅ primary UX | via Rive editor | override-level only |
+| Figma import bridge | ✅ (Figma Motion files) | ❌ | ✅ (`import_figma_scene` — prototype reactions → state machine) |
+| Video → vector motion | ❌ | ❌ | ✅ `vectorize_video` — fully local flipbook tracing |
+| Auto-rigging from any SVG | ❌ | ❌ (manual rigging) | ✅ `rig_asset` — species schemas, look-at IK, blob fallback |
+| App-wide ambient life | ❌ | ❌ (per-file) | ✅ `animate_app_life` — one sweep, every indexed asset |
+| Data binding to real app state | ❌ | designer-guessed inputs | ✅ binds to detected source-state properties |
+| Self-verifying render loop | ❌ | ❌ | ✅ `review_animation` — deterministic critique + auto-fix, scored |
+| Original asset generation | ❌ | explicitly declined | ✅ simple lane (host model) / premium lane (structured SVG) |
+| Agent-controllable surface | ❌ | ✅ tool calls | ✅ 38 tools; agent plans *and* executes the loop |
+
+Honest scope notes for evaluators: video tracing today produces layered-flipbook SceneDocs (contour-traced keyframes with temporal reduction); pose-tracked auto-rigging *from video* is roadmap, not shipped. Asset generation produces structured vector SVG — not raster diffusion illustration. And unlike RiveMCP's 267 runtime types, we don't target `.riv` output at all: SceneDoc compiles to native host-framework code, while `import_riv` reads `.riv` in.
+
+**Anim8 is where you animate by hand. Rive MCP builds what you specify. Motion MCP plans, generates, verifies, and ships.**
+
+---
+
 ## Architecture
 
 ```mermaid
 flowchart LR
     subgraph AGENT["🤖 Coding Agent (Codex / Claude / Cursor)"]
-        T["MCP Tools<br/>26 tools"]
+        T["MCP Tools<br/>38 tools"]
     end
 
     subgraph RESEARCH["🔍 Understand"]
@@ -214,6 +238,9 @@ graph TD
 | `player` | Zero-dep `ScenePlayer` + `<motion-scene>` web component: transitions, deterministic seek, reduced-motion |
 | `exporters` | Lottie JSON writer (bezier paths incl. arc→cubic) · CSS-keyframe animated SVG |
 | `riv-importer` | Rive binary reader + structural/keyframe/geometry decoder using rive-runtime's core type keys — paths → SVG, KeyFrameDoubles → SceneClips, SM graphs → topology |
+| `figma-bridge` | Figma import bridge: thin plugin collector (frames, elements, prototype reactions) → plain-JSON snapshot → synthesized SceneDoc artboards with per-state pose clips; entry frame renders to layered SVG |
+| `vectorizer` | Video → vector animation, fully local: ffmpeg frame extraction, median-cut palette quantization, contour boundary tracing (with hole loops), temporal frame reduction → playable flipbook SceneDoc |
+| `critic` | Deterministic motion critique: structural checks (key order, value bounds, loop seams, micro-jitter, reduced-motion), headless raster checks (static/blank frames), 0–100 scoring, and safe auto-fixes |
 | `capture` | PNG decoder (zlib + all scanline filters) · GIF89a encoder (exact/popularity palette, LZW) · ffmpeg MP4/WebM assembly · resvg frame pipeline |
 | `ast-patcher` | Surgical import/usage patches via the TypeScript compiler API |
 | `quiver-provider` | Premium SVG generation with key rotation, backoff, live pricing sync |
@@ -233,7 +260,7 @@ graph TD
 
 Every generated component ships with: reduced-motion handling, semantic labels, controlled/uncontrolled state support, and a host-side state machine you own — nothing phones home at runtime.
 
-## MCP tools (30)
+## MCP tools (38)
 
 **Understand the codebase**
 
@@ -263,8 +290,10 @@ Every generated component ships with: reduced-motion handling, semantic labels, 
 | `ingest_svg_asset` | Validate + stage any SVG with rig report |
 | `generate_premium_svg_asset` | QuiverAI structured SVG generation |
 | `generate_svg_asset` / `vectorize_asset` | Direct Quiver calls (image → vector too) |
+| `vectorize_video` | **Video → vector animation** (Anim8's headline, fully local): ffmpeg frames → median-cut palette → contour-traced layered SVG keyframes → temporal reduction → playable flipbook SceneDoc |
 | `generate_asset_batch` | Up to 64 items, dry-run costing, per-item isolation |
 | `analyze_svg_anatomy` / `resolve_anatomy_action` | Species detection; blink/wave/flap/caw resolution |
+| `rig_asset` / `list_rig_capabilities` | **Auto-rigger**: bones + eye look-at IK + ambient secondary motion for any SVG (bipeds, birds, quadrupeds, insects, vehicles, universal blob fallback) |
 | `list_svg_models` / `estimate_motion_cost` | Live model pricing |
 
 **Animate & ship**
@@ -272,7 +301,10 @@ Every generated component ships with: reduced-motion handling, semantic labels, 
 | Tool | Purpose |
 |---|---|
 | `generate_animation` | SceneDoc-compiled native motion code (options: `style`, `trigger`, `intensity`, `framework`, `patchIntoSource`, `usageAnchor`) |
+| `animate_app_life` | **App-wide ambient-life sweep**: breathe/hover/press (+ blink/wobble/pop by anatomy) across every indexed asset, auto-rigging characters — staged as ONE reviewable diff |
+| `bind_motion_to_state` / `list_motion_bindings` | **Data binding**: persisted typed app-state properties drive machine inputs in generated code (`hasError` → error shake, `isLoading` → active emphasis, `isSuccess` → reward pop) |
 | `preview_animation` / `apply_motion_diff` | Inspect then apply staged diffs with validation |
+| `review_animation` | **Self-verifying quality loop**: deterministic structural critique (key order, value bounds, loop seams, micro-jitter, reduced-motion) + headless render check (static/blank frames), scored 0-100 with actionable fixes — run after `generate_animation`, before `apply_motion_diff` |
 | `export_animation` | Bake a SceneDoc state into **Lottie JSON** or self-contained **animated SVG** |
 | `import_riv` | **Migration engine**: validate any `.riv`, then decode it — artboards, animations, state-machine topology, **path geometry with ARGB fills**, and **keyframed transform tracks** — into renderable SceneDocs. Imported files play immediately via `<motion-scene>` or `capture_gif` |
 | `capture_gif` | Render a SceneDoc state to an animated **GIF** — no browser: headless SVG rasterization + pure-TS GIF89a/LZW encoder |
@@ -283,13 +315,19 @@ Every generated component ships with: reduced-motion handling, semantic labels, 
 
 Every generated/ingested SVG carries a **rig report**: which roles (`eyes`, `head/body`, `mouth/beak`, `limb/wing`, `tail`, `shadow`, `sparkle`) were detected, what they can bind to (eye-follow, blink, press-depress…), and what's missing — verify state-machine readiness before generating code.
 
+**Characterize anything with `rig_asset`**: the auto-rigger turns any indexed SVG (or raw source) into a SceneDoc v1 rig block — bones from detected anatomy, an eye **look-at IK chain**, and ambient **secondary motion** (`breathe` 3400 ms, `blink` 4200 ms, tail spring, wing sway). Species schemas cover `human-biped`, `avian-crow`, `generic-quadruped`, `insect`, `vehicle` (chassis/cab/headlights/wheels), and a universal `blob` fallback — so *every* file, even one with no recognizable anatomy, ships alive by default.
+
+**Bring the whole app to life with `animate_app_life`**: one call gives every indexed SVG asset an ambient state machine (idle breathe → hover lift → press squash, plus blink/wobble/reward-pop when anatomy supports it), auto-rigging characters along the way — staged as a single reviewable diff. Then `bind_motion_to_state` wires generated components to real app state: bound properties become a typed `data` prop that drives machine inputs (`hasError → error shake`, `isLoading → active emphasis`, `isSuccess → reward pop`).
+
+**Close the loop with `review_animation`**: every generated scene can be self-verified before it ships — structural checks catch unsorted keys, out-of-range values, loop-seam pops, and micro-jitter; headless render checks catch static output (tracks targeting missing part ids) and blank frames. Reports score 0-100, persist under `.motion-mcp/critiques/`, and return deterministic fixes the host agent can apply. Works immediately after ingestion via the ambient-scene fallback — no research step required.
+
 ---
 
 ## Quality gates: conformance, goldens, determinism
 
 ```bash
-pnpm test          # node --test — 106 tests across 20 suites
-pnpm typecheck     # strict TS across all 20 packages
+pnpm test          # node --test — 154 tests across 27 suites
+pnpm typecheck     # strict TS across all 27 packages
 pnpm build         # topological build
 ```
 
@@ -383,7 +421,7 @@ apply_motion_diff({ diffId })     // writes files + runs project validation
 
 ```text
 motion-mcp/
-├── packages/               # 20 workspace packages (see architecture above)
+├── packages/               # 27 workspace packages (see architecture above)
 ├── apps/
 │   ├── exercise-demo/      # Web studio demo
 │   ├── exercise-mobile/    # Expo shell
@@ -391,7 +429,7 @@ motion-mcp/
 ├── examples/next-app       # Reference integration with real .motion-mcp artifacts
 ├── pipeline/               # Offline Python bake pipeline (ARDY-ready)
 ├── skills/motion-mcp/      # Canonical 13-step agent workflow
-└── tests/                  # 16 suites incl. conformance harness
+└── tests/                  # 27 suites incl. conformance harness
 ```
 
 ---
