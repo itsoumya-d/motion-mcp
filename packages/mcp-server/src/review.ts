@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { critiqueScene } from "@motion-mcp/critic";
+import { critiqueScene, loadRubric } from "@motion-mcp/critic";
 import { nowIso } from "@motion-mcp/shared-types";
 import { loadSceneForAsset, buildAmbientFallbackDoc } from "./scene-source.js";
 
@@ -60,7 +60,8 @@ export async function reviewAnimation(
     machine?.states[0]?.name ??
     "play";
 
-  const report = await critiqueScene(doc, { state: stateName, maxFrames: input.maxFrames });
+  const rubric = await loadRubric(root);
+  const report = await critiqueScene(doc, { state: stateName, maxFrames: input.maxFrames, rubric });
   const reportDir = path.join(root, ".motion-mcp", "critiques");
   await fs.mkdir(reportDir, { recursive: true });
   const reportPathRelative = path.join(".motion-mcp", "critiques", `${base}.${slug(stateName)}.json`);

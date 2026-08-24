@@ -91,6 +91,22 @@ import {
 import { loadSceneForAsset, sceneForPlanItem } from "./scene-source.js";
 import { reviewAnimation } from "./review.js";
 import { importFigmaScene } from "./figma-import.js";
+import { ensoulAsset } from "./ensoul.js";
+import {
+  EXPORT_FORMATS,
+  applyTemperamentTool,
+  autoRepairTool,
+  exportAssetTool,
+  generateFromPromptTool,
+  judgeAgainstReferenceTool,
+  lintMotionCurvesTool,
+  motionDocsSearch,
+  perceive3dTool,
+  perceiveImageTool,
+  proposeRigTool,
+  renderPreviewTool,
+  verifyCrossRuntimeTool
+} from "./forge.js";
 
 const server = new McpServer({
   name: "motion-mcp",
@@ -856,6 +872,306 @@ server.registerTool(
     }));
   }
 );
+
+const SceneTargetSchema = {
+  diffId: z.string().optional().describe("Target the component referenced by this staged diff."),
+  componentId: z.string().optional().describe("Or target an indexed component directly.")
+};
+
+server.registerTool(
+  "lint_motion_curves",
+  {
+    title: "Lint motion curves",
+    description:
+      "Motion-curve linter over a component's compiled scene: flags mechanical linear easing on long segments and velocity discontinuities that pop on screen. Pure math, no rendering. Rubric-driven thresholds come from .motion-mcp/rubric.json.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      ...SceneTargetSchema,
+      state: z.string().optional()
+    }
+  },
+  async ({ rootPath, ...target }) => jsonResult(await lintMotionCurvesTool(resolveRoot(rootPath), target))
+);
+
+server.registerTool(
+  "auto_repair",
+  {
+    title: "Auto-repair animation",
+    description:
+      "Closed verification-and-repair loop: critique (structural + curve lint + headless render + vision judge) then apply rubric-allowed mechanical fixes segment by segment, re-critique, up to N attempts. Returns the attempt ledger and remaining issues for the host agent.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      ...SceneTargetSchema,
+      state: z.string().optional(),
+      maxAttempts: z.number().int().min(1).max(8).optional().describe("Override rubric.repair.maxAttempts (default 3).")
+    }
+  },
+  async ({ rootPath, ...rest }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 5, reason: "auto_repair" });
+    const { state, maxAttempts } = rest as { state?: string; maxAttempts?: number };
+    return jsonResult(await autoRepairTool(root, { ...targetOf(rest), state, maxAttempts }));
+  }
+);
+
+server.registerTool(
+  "judge_against_reference",
+  {
+    title: "Judge against reference",
+    description:
+      "Vision-judge pass: headless-renders the state to frames and scores aliveness 0-100 against the rubric threshold. Default provider is deterministic mock heuristics; gemini/claude providers plug in via rubric.judge.provider once wired.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      ...SceneTargetSchema,
+      state: z.string().optional(),
+      prompt: z.string().optional().describe("Original intent text, kept on record in the judge context."),
+      maxFrames: z.number().int().min(2).max(24).optional()
+    }
+  },
+  async ({ rootPath, ...rest }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 4, reason: "judge_against_reference" });
+    const { state, prompt, maxFrames } = rest as { state?: string; prompt?: string; maxFrames?: number };
+    return jsonResult(await judgeAgainstReferenceTool(root, { ...targetOf(rest), state, prompt, maxFrames }));
+  }
+);
+
+const TemperamentAxis = z.number().min(0).max(1).optional();
+
+server.registerTool(
+  "ensoul_asset",
+  {
+    title: "Ensoul asset",
+    description:
+      "The closed loop, one call: perceive → generate → verify → repair → preview. Give it ANY asset — raw or indexed SVG, raster PNG (perceived into paint-region parts first), or glTF mesh (skeleton proposal) — plus an optional motion prompt and temperament. Returns a stage-by-stage receipt with staged SceneDoc, rig proposals, and a GIF preview when a raster source exists. Nothing commits without review.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      svg: z.string().optional(),
+      componentId: z.string().optional().describe("Indexed SVG asset (from scan_assets)."),
+      imagePath: z.string().optional().describe("PNG file path; perceived into parts first."),
+      imageBase64: z.string().optional().describe("Or PNG bytes base64."),
+      meshPath: z.string().optional().describe("glTF 2.0 .gltf mesh path."),
+      prompt: z.string().optional().describe("Motion intent; defaults to calm ambient idle."),
+      temperament: z.union([z.string(), z.object({ energy: TemperamentAxis, weight: TemperamentAxis, warmth: TemperamentAxis, precision: TemperamentAxis })]).optional(),
+      judge: z.boolean().optional().describe("Run the vision-judge pass after generation. Default false."),
+      maxRepairAttempts: z.number().int().min(1).max(8).optional()
+    }
+  },
+  async ({ rootPath, ...rest }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 12, reason: "ensoul_asset" });
+    const input = rest as {
+      svg?: string;
+      componentId?: string;
+      imagePath?: string;
+      imageBase64?: string;
+      meshPath?: string;
+      prompt?: string;
+      temperament?: string | { energy?: number; weight?: number; warmth?: number; precision?: number };
+      judge?: boolean;
+      maxRepairAttempts?: number;
+    };
+    return jsonResult(await ensoulAsset(root, input));
+  }
+);
+
+server.registerTool(
+  "apply_temperament",
+  {
+    title: "Apply temperament",
+    description:
+      "Ensoulment primitive: resolve a named preset (calm/energetic/nervous/playful/precise/heavy) or explicit energy/weight/warmth/precision axes into a motion profile, then deterministically rewrite scene timing and easing to match. Stages the tempered SceneDoc for review.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      temperament: z.union([z.string(), z.object({ energy: TemperamentAxis, weight: TemperamentAxis, warmth: TemperamentAxis, precision: TemperamentAxis })])
+        .describe("Preset name or axis object."),
+      ...SceneTargetSchema
+    }
+  },
+  async ({ rootPath, temperament, ...rest }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 4, reason: "apply_temperament" });
+    return jsonResult(await applyTemperamentTool(root, { temperament, ...targetOf(rest) }));
+  }
+);
+
+server.registerTool(
+  "generate_motion_from_prompt",
+  {
+    title: "Generate motion from prompt",
+    description:
+      "Generation engine: parse a motion prompt with a deterministic lexicon (bounce/spin/shake/pulse/nod/wave/jump/sway/blink/slide + speed/intensity/direction/loop modifiers), synthesize temperament-driven keyframes procedurally (easing, overshoot, squash-and-stretch, stagger all derive from the temperament axes), assemble a state machine, and self-check (schema validation + structural critique + curve lint) BEFORE returning. Stages the SceneDoc — nothing commits.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      prompt: z.string().min(3).describe("e.g. 'nervous fast shake loop' or 'exaggerated jump then calm idle'."),
+      temperament: z
+        .union([z.string(), z.object({ energy: TemperamentAxis, weight: TemperamentAxis, warmth: TemperamentAxis, precision: TemperamentAxis })])
+        .optional()
+        .describe("Named preset or axes; defaults to neutral."),
+      componentId: z.string().optional().describe("Indexed SVG asset to target; parts are derived from its ids."),
+      svg: z.string().optional().describe("Or raw SVG source."),
+      parts: z.array(z.string()).optional().describe("Explicit part ids; overrides derived parts.")
+    }
+  },
+  async ({ rootPath, prompt, temperament, componentId, svg, parts }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 6, reason: "generate_motion_from_prompt" });
+    return jsonResult(
+      await generateFromPromptTool(root, { prompt, temperament, componentId, svg, parts })
+    );
+  }
+);
+
+server.registerTool(
+  "render_preview",
+  {
+    title: "Render preview",
+    description:
+      "Headlessly render a component's state to an animated GIF preview (base64) without any staged diff or browser.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      ...SceneTargetSchema,
+      state: z.string().optional(),
+      maxFrames: z.number().int().min(2).max(24).optional(),
+      width: z.number().int().min(16).max(1024).optional()
+    }
+  },
+  async ({ rootPath, ...rest }) => {
+    const { state, maxFrames, width } = rest as { state?: string; maxFrames?: number; width?: number };
+    return jsonResult(await renderPreviewTool(resolveRoot(rootPath), { ...targetOf(rest), state, maxFrames, width }));
+  }
+);
+
+const DESTINATIONS = [
+  "web", "html", "react", "next", "react-native", "expo", "ios", "android",
+  "flutter", "unity", "unreal", "video"
+] as const;
+
+server.registerTool(
+  "export_asset",
+  {
+    title: "Export asset",
+    description:
+      "Delivery loop: bake a component's compiled state into animated SVG, Lottie JSON, GIF, or MP4/WebM. Auto-selects the format from the stated destination (with graceful fallback), or pass an explicit format. Writes under .motion-mcp/exports/.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      ...SceneTargetSchema,
+      destination: z.enum(DESTINATIONS).optional().describe("Where the asset will live; drives automatic format choice."),
+      format: z.enum(EXPORT_FORMATS).optional().describe("Explicit format overrides destination selection."),
+      state: z.string().optional(),
+      maxFrames: z.number().int().min(2).max(120).optional(),
+      width: z.number().int().min(16).max(1024).optional()
+    }
+  },
+  async ({ rootPath, ...rest }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 3, reason: "export_asset" });
+    const options = rest as {
+      destination?: string;
+      format?: string;
+      state?: string;
+      maxFrames?: number;
+      width?: number;
+    };
+    return jsonResult(await exportAssetTool(root, { ...targetOf(rest), ...options }));
+  }
+);
+
+server.registerTool(
+  "propose_rig",
+  {
+    title: "Propose rig",
+    description:
+      "Perception seam: analyze any indexed SVG (or raw source) and return a rig PROPOSAL — species match, bones, IK chains, secondary motion, capabilities, suggested states — without persisting anything. Review it, then call rig_asset to commit.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      componentId: z.string().optional(),
+      svg: z.string().optional()
+    }
+  },
+  async ({ rootPath, componentId, svg }) =>
+    jsonResult(await proposeRigTool(resolveRoot(rootPath), { componentId, svg }))
+);
+
+server.registerTool(
+  "motion_docs_search",
+  {
+    title: "Search motion docs",
+    description:
+      "Grounding search over motion-mcp's own documentation: SceneDoc schema, v1 extension contract (temperament, converters, rig weights), architecture, and the critic rubric. Use before calling generation tools so inputs stay schema-valid.",
+    inputSchema: {
+      query: z.string().min(2),
+      limit: z.number().int().min(1).max(10).optional()
+    }
+  },
+  async ({ query, limit }) => jsonResult(await motionDocsSearch(query, limit))
+);
+
+server.registerTool(
+  "perceive_image",
+  {
+    title: "Perceive image",
+    description:
+      "Raster perception (PNG): quantize, trace connected paint regions, and emit a layered SVG whose regions are named reviewable parts — then run the same anatomy detection + auto-rigger used for authored SVGs. Returns a rig PROPOSAL plus the staged SVG; nothing is committed.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      imagePath: z.string().optional().describe("Path to a PNG file (relative to project root)."),
+      imageBase64: z.string().optional().describe("Or raw PNG bytes, base64-encoded."),
+      maxColors: z.number().int().min(2).max(16).optional(),
+      maxParts: z.number().int().min(1).max(64).optional()
+    }
+  },
+  async ({ rootPath, imagePath, imageBase64, maxColors, maxParts }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 6, reason: "perceive_image" });
+    return jsonResult(await perceiveImageTool(root, { imagePath, imageBase64, maxColors, maxParts }));
+  }
+);
+
+server.registerTool(
+  "perceive_3d",
+  {
+    title: "Perceive 3D asset",
+    description:
+      "glTF 2.0 skeleton proposals: skinned meshes yield their exact joint hierarchy (names preserved, XY-projected origins) with per-joint weight statistics from JOINTS_0/WEIGHTS_0; unskinned static meshes get an inferred band chain along the longest axis. Stages a proposal JSON — FBX/OBJ and binary .glb are not supported yet.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      meshPath: z.string().describe("Path to a .gltf JSON document (embedded base64 buffers or sibling .bin)."),
+      bands: z.number().int().min(2).max(12).optional().describe("Band count for unskinned inference. Default 5.")
+    }
+  },
+  async ({ rootPath, meshPath, bands }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 8, reason: "perceive_3d" });
+    return jsonResult(await perceive3dTool(root, { meshPath, bands }));
+  }
+);
+
+server.registerTool(
+  "verify_cross_runtime",
+  {
+    title: "Verify cross-runtime parity",
+    description:
+      "Export parity check: bakes one state through BOTH renderable targets (animated SVG + Lottie JSON) and verifies every motion stop time survived per property bucket, with per-target mismatch reports and a score. Catches exporter drift before shipping. Structural by design — pixel-level cross-rendering needs a headless Lottie player (roadmap). Codegen parity across React/RN/Flutter/Unity remains pinned separately by the conformance harness.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      ...SceneTargetSchema,
+      state: z.string().optional(),
+      fps: z.number().int().min(12).max(120).optional().describe("Lottie export fps; drives frame tolerance. Default 60.")
+    }
+  },
+  async ({ rootPath, ...rest }) => {
+    const { state, fps } = rest as { state?: string; fps?: number };
+    return jsonResult(await verifyCrossRuntimeTool(resolveRoot(rootPath), { ...targetOf(rest), state, fps }));
+  }
+);
+
+function targetOf(input: Record<string, unknown>): { componentId?: string; diffId?: string } {
+  return {
+    componentId: typeof input.componentId === "string" ? input.componentId : undefined,
+    diffId: typeof input.diffId === "string" ? input.diffId : undefined
+  };
+}
 
 server.registerTool(
   "import_figma_scene",

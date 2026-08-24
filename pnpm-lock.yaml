@@ -294,6 +294,15 @@ importers:
         specifier: workspace:*
         version: link:../scene-graph
 
+  packages/generation-engine:
+    dependencies:
+      '@motion-mcp/critic':
+        specifier: workspace:*
+        version: link:../critic
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
+
   packages/mcp-server:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -344,12 +353,18 @@ importers:
       '@motion-mcp/figma-bridge':
         specifier: workspace:*
         version: link:../figma-bridge
+      '@motion-mcp/generation-engine':
+        specifier: workspace:*
+        version: link:../generation-engine
       '@motion-mcp/motion-planner':
         specifier: workspace:*
         version: link:../motion-planner
       '@motion-mcp/motion-runtime':
         specifier: workspace:*
         version: link:../motion-runtime
+      '@motion-mcp/perception-engine':
+        specifier: workspace:*
+        version: link:../perception-engine
       '@motion-mcp/quiver-provider':
         specifier: workspace:*
         version: link:../quiver-provider
@@ -391,6 +406,21 @@ importers:
         version: link:../shared-types
 
   packages/motion-runtime: {}
+
+  packages/perception-engine:
+    dependencies:
+      '@motion-mcp/anatomy-engine':
+        specifier: workspace:*
+        version: link:../anatomy-engine
+      '@motion-mcp/capture':
+        specifier: workspace:*
+        version: link:../capture
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
+      '@motion-mcp/vectorizer':
+        specifier: workspace:*
+        version: link:../vectorizer
 
   packages/player:
     dependencies:

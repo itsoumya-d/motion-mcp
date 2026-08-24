@@ -80,7 +80,7 @@ test("auto research writes source-backed findings, ranked opportunities, and con
   }
 });
 
-test("HTTP bridge exposes auto_research_motion as a local MCP smoke path", async () => {
+test("HTTP bridge exposes auto_research_motion as a local MCP smoke path", { timeout: 180000 }, async () => {
   const root = await makeFixture();
   const port = await getFreePort();
   const child = spawnServer(port);
@@ -218,7 +218,9 @@ function spawnServer(port: number): ChildProcessWithoutNullStreams {
 
 async function waitForBridge(port: number): Promise<void> {
   const url = `http://127.0.0.1:${port}/tool/get_credit_balance`;
-  for (let attempt = 0; attempt < 150; attempt += 1) {
+  // The child compiles the whole server graph via tsx; under full-suite
+  // parallel load that can take well over 30s before the port binds.
+  for (let attempt = 0; attempt < 450; attempt += 1) {
     try {
       const response = await fetch(url, {
         method: "POST",
