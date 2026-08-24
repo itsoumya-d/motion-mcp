@@ -4,5 +4,12 @@ export { simplifyLoop, traceColorMask } from "./trace.js";
 export type { Contour, Point } from "./trace.js";
 export { vectorizeFrames } from "./flipbook.js";
 export type { FlipbookResult, VectorizeOptions } from "./flipbook.js";
+export { trackPartsAcrossFrames } from "./track.js";
+export type {
+  PartFrameSample,
+  TrackOptions,
+  TrackResult,
+  TrackedPart
+} from "./track.js";
 export { extractVideoFrames, splitPngStream } from "./extract.js";
 export type { ExtractOptions } from "./extract.js";
