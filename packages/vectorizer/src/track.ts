@@ -5,6 +5,14 @@ export interface PartFrameSample {
   tMs: number;
   centroid: { x: number; y: number };
   bbox: { minX: number; minY: number; maxX: number; maxY: number };
+  /**
+   * Simplified loop this sample's track matched, in base coordinates.
+   * Populated when frame inputs carry `fills` (the flipbook path); it is
+   * the part's shape at its first appearance for downstream layer builders.
+   */
+  loop?: Point[];
+  /** Quantized fill color of the matched region, e.g. "#ff8800". */
+  fill?: string;
 }
 
 export interface TrackedPart {
@@ -31,6 +39,7 @@ export interface TrackOptions {
 
 interface LoopBox {
   points: Point[];
+  fill?: string;
   centroid: { x: number; y: number };
   bbox: { minX: number; minY: number; maxX: number; maxY: number };
   area: number;
@@ -45,7 +54,7 @@ interface LoopBox {
  * order — never by Map iteration order.
  */
 export function trackPartsAcrossFrames(
-  frames: Array<{ tMs: number; loops: Point[][] }>,
+  frames: Array<{ tMs: number; loops: Point[][]; fills?: string[] }>,
   options: TrackOptions = {}
 ): TrackResult {
   const minIou = options.minIou ?? 0.15;
@@ -53,7 +62,9 @@ export function trackPartsAcrossFrames(
   const diagonal = Math.hypot(options.canvas?.width ?? 0, options.canvas?.height ?? 0);
   const maxJump = diagonal > 0 ? maxJumpRatio * diagonal : Infinity;
 
-  const boxes = frames.map((frame) => frame.loops.map(toLoopBox));
+  const boxes = frames.map((frame) =>
+    frame.loops.map((loop, loopIndex) => toLoopBox(loop, frame.fills?.[loopIndex]))
+  );
   const parts: TrackedPart[] = [];
   let unmatchedLoops = 0;
 
@@ -135,7 +146,7 @@ export function trackPartsAcrossFrames(
   return { parts, unmatchedLoops };
 }
 
-function toLoopBox(points: Point[]): LoopBox {
+function toLoopBox(points: Point[], fill?: string): LoopBox {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -153,6 +164,7 @@ function toLoopBox(points: Point[]): LoopBox {
   const count = Math.max(points.length, 1);
   return {
     points,
+    fill,
     centroid: { x: sumX / count, y: sumY / count },
     bbox: { minX, minY, maxX, maxY },
     area: Math.abs(shoelaceArea(points))
@@ -160,7 +172,17 @@ function toLoopBox(points: Point[]): LoopBox {
 }
 
 function sampleOf(partId: string, tMs: number, box: LoopBox): PartFrameSample {
-  return { partId, tMs, centroid: { ...box.centroid }, bbox: { ...box.bbox } };
+  const sample: PartFrameSample = {
+    partId,
+    tMs,
+    centroid: { ...box.centroid },
+    bbox: { ...box.bbox }
+  };
+  if (box.fill !== undefined) {
+    sample.fill = box.fill;
+    sample.loop = box.points.map((point) => ({ ...point }));
+  }
+  return sample;
 }
 
 function intersectionOverUnion(

@@ -54,8 +54,43 @@ test("tracker opens a new part when a loop appears without a predecessor", () =>
   assert.equal(newcomer!.frames[0]!.bbox.minX, 52, "newcomer sample records the new loop's bbox");
 });
 
+test("tracker retains matched loop geometry and fill color per sample", () => {
+  const frames = [
+    {
+      tMs: 0,
+      loops: [[{ x: 10, y: 10 }, { x: 30, y: 10 }, { x: 30, y: 30 }, { x: 10, y: 30 }]],
+      fills: ["#ff0000"]
+    },
+    {
+      tMs: 83,
+      loops: [[{ x: 18, y: 10 }, { x: 38, y: 10 }, { x: 38, y: 30 }, { x: 18, y: 30 }]],
+      fills: ["#ff0000"]
+    }
+  ];
+
+  const result = trackPartsAcrossFrames(frames, { canvas: { width: 64, height: 64 } });
+
+  const part = result.parts[0]!;
+  assert.equal(part.frames.length, 2);
+  assert.equal(part.frames[0]!.fill, "#ff0000");
+  assert.ok(part.frames[1]!.loop, "second sample keeps its matched loop");
+  assert.equal(part.frames[1]!.loop!.length >= 4, true);
+  // First sample's loop is the part's base geometry.
+  assert.equal(part.frames[0]!.loop!.length, 4);
+});
+
+test("samples omit loop/fill fields when fills are not supplied", () => {
+  const frames = [
+    { tMs: 0, loops: [[{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }]] }
+  ];
+  const result = trackPartsAcrossFrames(frames);
+  assert.equal(result.parts[0]!.frames[0]!.fill, undefined);
+  assert.equal(result.parts[0]!.frames[0]!.loop, undefined);
+});
+
 test("tracker returns no parts for degenerate input", () => {
   assert.deepEqual(trackPartsAcrossFrames([], { canvas: { width: 64, height: 64 } }).parts, []);
-  const emptyLoops = [{ tMs: 0, loops: [] as Pt[] }];
+  const emptyLoops = [{ tMs: 0, loops: [] as Pt[][] }];
   assert.deepEqual(trackPartsAcrossFrames(emptyLoops, { canvas: { width: 64, height: 64 } }).parts, []);
 });
+
