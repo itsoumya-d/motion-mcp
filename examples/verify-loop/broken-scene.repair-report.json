@@ -1,0 +1,87 @@
+{
+  "scenePath": "/Users/soumyadebnath16/Developer/motion-mcp/examples/verify-loop/broken-scene.json",
+  "ok": true,
+  "docChanged": true,
+  "attempts": [
+    {
+      "attempt": 1,
+      "score": 34,
+      "ok": false,
+      "summary": "2 blocking issues, 2 warnings.",
+      "checks": [
+        {
+          "id": "keys-sorted",
+          "severity": "fail",
+          "message": "Keys are not time-sorted on broken:*.scale.",
+          "evidence": "broken:*.scale"
+        },
+        {
+          "id": "loop-seam",
+          "severity": "warn",
+          "message": "Loop seam pop on broken:*.scale: starts 1.08, ends 1.",
+          "evidence": "broken:*.scale"
+        },
+        {
+          "id": "value-bounds",
+          "severity": "fail",
+          "message": "opacity must stay within [0, 1] on broken:*.opacity (found 1.4 at t=300).",
+          "evidence": "broken:*.opacity"
+        },
+        {
+          "id": "loop-seam",
+          "severity": "warn",
+          "message": "Loop seam pop on broken:*.opacity: starts 0.9, ends 0.2.",
+          "evidence": "broken:*.opacity"
+        },
+        {
+          "id": "judge-aliveness",
+          "severity": "pass",
+          "message": "Vision judge (mock) aliveness 55/100 ≥ threshold 55.",
+          "evidence": "mock:55"
+        }
+      ],
+      "fixesAppliedBeforeThisAttempt": []
+    },
+    {
+      "attempt": 2,
+      "score": 100,
+      "ok": true,
+      "summary": "All motion-quality checks passed.",
+      "checks": [
+        {
+          "id": "judge-aliveness",
+          "severity": "pass",
+          "message": "Vision judge (mock) aliveness 92/100 ≥ threshold 55.",
+          "evidence": "mock:92"
+        }
+      ],
+      "fixesAppliedBeforeThisAttempt": [
+        "sorted keys on broken:*.scale",
+        "rewrote mechanical linear easing on broken:*.scale",
+        "clamped opacity on broken:*.opacity",
+        "added loop wrap key on broken:*.opacity"
+      ]
+    }
+  ],
+  "appliedFixes": [
+    "sorted keys on broken:*.scale",
+    "rewrote mechanical linear easing on broken:*.scale",
+    "clamped opacity on broken:*.opacity",
+    "added loop wrap key on broken:*.opacity"
+  ],
+  "finalReport": {
+    "ok": true,
+    "score": 100,
+    "checks": [
+      {
+        "id": "judge-aliveness",
+        "severity": "pass",
+        "message": "Vision judge (mock) aliveness 92/100 ≥ threshold 55.",
+        "evidence": "mock:92"
+      }
+    ],
+    "fixes": [],
+    "summary": "All motion-quality checks passed."
+  },
+  "repairedDocPath": "/Users/soumyadebnath16/Developer/motion-mcp/examples/verify-loop/broken-scene.repaired.json"
+}

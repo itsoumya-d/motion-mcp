@@ -1,4 +1,5 @@
 import type { SceneArtboard, SceneClip, SceneDoc, SceneTrack } from "@motion-mcp/scene-graph";
+import { checkConfig, DEFAULT_RUBRIC, type MotionRubric } from "./rubric.js";
 
 export type CritiqueSeverity = "fail" | "warn" | "pass";
 
@@ -21,18 +22,15 @@ export interface MotionCritique {
   summary: string;
 }
 
-const FAIL_PENALTY = 25;
-const WARN_PENALTY = 8;
-
-export function scoreChecks(checks: CritiqueCheck[]): MotionCritique {
+export function scoreChecks(checks: CritiqueCheck[], rubric: MotionRubric = DEFAULT_RUBRIC): MotionCritique {
   let score = 100;
   const fixes: string[] = [];
   for (const check of checks) {
     if (check.severity === "fail") {
-      score -= FAIL_PENALTY;
+      score -= rubric.scoring.failPenalty;
       fixes.push(fixFor(check));
     } else if (check.severity === "warn") {
-      score -= WARN_PENALTY;
+      score -= rubric.scoring.warnPenalty;
       fixes.push(fixFor(check));
     }
   }
@@ -63,7 +61,10 @@ const FIX_TEMPLATES: Record<string, (check: CritiqueCheck) => string> = {
   "micro-jitter": (check) => `Reduce alternating micro-movement on ${check.evidence ?? "the track"}; amplitude below 2px reads as noise.`,
   "reduced-motion": () => "Mark semantics.reducedMotionSafe and provide a reduced variant for large-amplitude loops.",
   "render-static": () => "The rendered frames are identical — check that tracks target parts that exist in the source SVG ids.",
-  "render-blank": () => "Frames render blank — verify sourceSvg is attached to the artboard and fills are not fully transparent."
+  "render-blank": () => "Frames render blank — verify sourceSvg is attached to the artboard and fills are not fully transparent.",
+  "easing-mechanical": (check) => `Replace linear easing with easeOut/easeInOut on ${check.evidence ?? "the track"} so motion accelerates and settles naturally.`,
+  "velocity-discontinuity": (check) => `Smooth the velocity jump before the flagged key on ${check.evidence ?? "the track"} by adding an intermediate key or fixing units.`,
+  "judge-aliveness": (check) => check.message
 };
 
 function fixFor(check: CritiqueCheck): string {
@@ -82,33 +83,34 @@ interface BoundsRule {
   label: string;
 }
 
-const BOUNDS_RULES: BoundsRule[] = [
-  { property: /^opacity$/, min: 0, max: 1, label: "opacity must stay within [0, 1]" },
-  { property: /^(scale|scaleX|scaleY)$/, min: 0.05, max: 5, label: "scale should stay within [0.05, 5]" },
-  { property: /^rotate$/, min: -1080, max: 1080, label: "rotation beyond ±1080° is almost always a bug" },
-  { property: /^(translateX|translateY|x|y)$/, min: -20000, max: 20000, label: "translation far outside any artboard" }
-];
+function boundsRules(rubric: MotionRubric): BoundsRule[] {
+  return rubric.bounds.map((rule) => ({
+    property: new RegExp(rule.property),
+    min: rule.min,
+    max: rule.max,
+    label: rule.label
+  }));
+}
 
 /**
  * Deterministic structural review of one artboard's clips.
  * Pure math over SceneDoc — no rasterization, safe to run anywhere.
  */
-export function analyzeArtboardMotion(artboard: SceneArtboard): MotionCritique {
+export function analyzeArtboardMotion(
+  artboard: SceneArtboard,
+  rubric: MotionRubric = DEFAULT_RUBRIC
+): MotionCritique {
   const checks: CritiqueCheck[] = [];
   const clipIds = Object.keys(artboard.clips);
 
   if (clipIds.length === 0) {
-    checks.push({
-      id: "clip-exists",
-      severity: "fail",
-      message: "Artboard has no compiled clips."
-    });
-    return scoreChecks(checks);
+    push(checks, emit(rubric, { id: "clip-exists", severity: "fail", message: "Artboard has no compiled clips." }));
+    return scoreChecks(checks, rubric);
   }
 
   for (const clipId of clipIds) {
     const clip = artboard.clips[clipId]!;
-    checks.push(...critiqueClip(clip));
+    checks.push(...critiqueClip(clip, rubric));
   }
 
   if (artboard.semantics?.reducedMotionSafe !== true) {
@@ -116,11 +118,11 @@ export function analyzeArtboardMotion(artboard: SceneArtboard): MotionCritique {
       artboard.clips[clipId]!.tracks.some((track) => amplitudeOf(track) > LARGE_AMPLITUDE)
     );
     if (hasLargeAmplitude) {
-      checks.push({
+      push(checks, emit(rubric, {
         id: "reduced-motion",
         severity: "warn",
         message: "Large-amplitude loops exist without semantics.reducedMotionSafe."
-      });
+      }));
     } else {
       checks.push({
         id: "reduced-motion",
@@ -130,41 +132,53 @@ export function analyzeArtboardMotion(artboard: SceneArtboard): MotionCritique {
     }
   }
 
-  return scoreChecks(checks);
+  return scoreChecks(checks, rubric);
+}
+
+/** Applies rubric enablement/severity; disabled checks emit nothing. */
+function emit(
+  rubric: MotionRubric,
+  candidate: CritiqueCheck & { severity: "fail" | "warn" }
+): CritiqueCheck | null {
+  const config = checkConfig(rubric, candidate.id);
+  if (!config.enabled) return null;
+  return { ...candidate, severity: config.severity ?? candidate.severity };
 }
 
 const LARGE_AMPLITUDE = 20;
 
-function critiqueClip(clip: SceneClip): CritiqueCheck[] {
+function critiqueClip(clip: SceneClip, rubric: MotionRubric): CritiqueCheck[] {
   const checks: CritiqueCheck[] = [];
 
   if (!(clip.durationMs > 0 && clip.durationMs <= 60000)) {
-    checks.push({
+    const check = emit(rubric, {
       id: "duration-sane",
       severity: "fail",
       message: `Clip "${clip.name}" has an invalid durationMs (${clip.durationMs}).`
     });
+    if (check) checks.push(check);
   }
 
   if (clip.tracks.length === 0) {
-    checks.push({
+    const check = emit(rubric, {
       id: "clip-exists",
       severity: "fail",
       message: `Clip "${clip.name}" has no tracks.`,
       evidence: clip.clipId
     });
+    if (check) checks.push(check);
     return checks;
   }
 
   for (const track of clip.tracks) {
     const evidence = `${clip.name}:${track.targetPart}.${track.property}`;
-    checks.push(...critiqueTrack(track, clip, evidence));
+    checks.push(...critiqueTrack(track, clip, evidence, rubric));
   }
 
   return checks;
 }
 
-function critiqueTrack(track: SceneTrack, clip: SceneClip, evidence: string): CritiqueCheck[] {
+function critiqueTrack(track: SceneTrack, clip: SceneClip, evidence: string, rubric: MotionRubric): CritiqueCheck[] {
   const checks: CritiqueCheck[] = [];
 
   // Key ordering / duplicates
@@ -177,24 +191,34 @@ function critiqueTrack(track: SceneTrack, clip: SceneClip, evidence: string): Cr
     if (current === previous) duplicate = true;
   }
   if (unsorted) {
-    checks.push({ id: "keys-sorted", severity: "fail", message: `Keys are not time-sorted on ${evidence}.`, evidence });
+    push(checks, emit(rubric, {
+      id: "keys-sorted",
+      severity: "fail",
+      message: `Keys are not time-sorted on ${evidence}.`,
+      evidence
+    }));
   }
   if (duplicate && !unsorted) {
-    checks.push({ id: "keys-sorted", severity: "warn", message: `Duplicate key times on ${evidence}; later key wins when sampled.`, evidence });
+    push(checks, emit(rubric, {
+      id: "keys-sorted",
+      severity: "warn",
+      message: `Duplicate key times on ${evidence}; later key wins when sampled.`,
+      evidence
+    }));
   }
 
   // Value bounds
-  for (const rule of BOUNDS_RULES) {
+  for (const rule of boundsRules(rubric)) {
     if (!rule.property.test(track.property)) continue;
     for (const key of track.keys) {
       if (typeof key.value !== "number") continue;
       if (key.value < rule.min || key.value > rule.max) {
-        checks.push({
+        push(checks, emit(rubric, {
           id: "value-bounds",
           severity: "fail",
           message: `${rule.label} on ${evidence} (found ${key.value} at t=${key.t}).`,
           evidence
-        });
+        }));
         break;
       }
     }
@@ -206,12 +230,12 @@ function critiqueTrack(track: SceneTrack, clip: SceneClip, evidence: string): Cr
   const spanToleranceMs = Math.max(120, Math.round(clip.durationMs * 0.1));
   const overflow = track.keys.filter((key) => key.t > clip.durationMs + spanToleranceMs);
   if (overflow.length > 0) {
-    checks.push({
+    push(checks, emit(rubric, {
       id: "track-span",
       severity: "warn",
       message: `${overflow.length} key(s) beyond clip.durationMs (${clip.durationMs}ms) on ${evidence}.`,
       evidence
-    });
+    }));
   }
 
   // Loop seam continuity
@@ -224,12 +248,12 @@ function critiqueTrack(track: SceneTrack, clip: SceneClip, evidence: string): Cr
     typeof last?.value === "number" &&
     Math.abs(first.value - last.value) > 1e-6
   ) {
-    checks.push({
+    push(checks, emit(rubric, {
       id: "loop-seam",
       severity: "warn",
       message: `Loop seam pop on ${evidence}: starts ${first.value}, ends ${last.value}.`,
       evidence
-    });
+    }));
   }
 
   // Micro-jitter detection on position channels
@@ -245,17 +269,21 @@ function critiqueTrack(track: SceneTrack, clip: SceneClip, evidence: string): Cr
         maxDelta = Math.max(maxDelta, Math.abs(d2));
       }
       if (reversals >= 3 && maxDelta < 2) {
-        checks.push({
+        push(checks, emit(rubric, {
           id: "micro-jitter",
           severity: "warn",
           message: `Alternating sub-2px movement on ${evidence} reads as jitter.`,
           evidence
-        });
+        }));
       }
     }
   }
 
   return checks;
+}
+
+function push(checks: CritiqueCheck[], check: CritiqueCheck | null): void {
+  if (check) checks.push(check);
 }
 
 function amplitudeOf(track: SceneTrack): number {
@@ -265,12 +293,12 @@ function amplitudeOf(track: SceneTrack): number {
 }
 
 /** Structural critique across every artboard in a doc (weakest report wins). */
-export function analyzeSceneMotion(doc: SceneDoc): MotionCritique {
-  const reports = doc.artboards.map(analyzeArtboardMotion);
+export function analyzeSceneMotion(doc: SceneDoc, rubric: MotionRubric = DEFAULT_RUBRIC): MotionCritique {
+  const reports = doc.artboards.map((artboard) => analyzeArtboardMotion(artboard, rubric));
   if (reports.length === 0) {
     return scoreChecks([
       { id: "clip-exists", severity: "fail", message: "Scene has no artboards." }
-    ]);
+    ], rubric);
   }
   const worst = reports.reduce((a, b) => (a.score <= b.score ? a : b));
   const merged: MotionCritique = {

@@ -1,0 +1,98 @@
+{
+  "formatVersion": 1,
+  "sceneId": "scene_broken_demo",
+  "name": "verify-loop broken demo",
+  "createdAt": "2026-08-24T00:00:00.000Z",
+  "artboards": [
+    {
+      "artboardId": "broken_bird",
+      "name": "Broken Bird",
+      "layers": [
+        {
+          "layerId": "layer_main",
+          "name": "main",
+          "order": 0,
+          "targetParts": [
+            "body",
+            "eye-left"
+          ],
+          "initialStateId": "state_broken"
+        }
+      ],
+      "clips": {
+        "clip-broken": {
+          "clipId": "clip-broken",
+          "name": "broken",
+          "durationMs": 600,
+          "loop": true,
+          "tracks": [
+            {
+              "targetPart": "*",
+              "property": "scale",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": 1
+                },
+                {
+                  "t": 240,
+                  "value": 1.08,
+                  "easing": "easeOut"
+                },
+                {
+                  "t": 600,
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "targetPart": "*",
+              "property": "opacity",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": 0.9
+                },
+                {
+                  "t": 300,
+                  "value": 1
+                },
+                {
+                  "t": 600,
+                  "value": 0.9
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "stateMachines": [
+        {
+          "stateMachineId": "sm_main",
+          "name": "main",
+          "initialStateId": "state_broken",
+          "states": [
+            {
+              "stateId": "state_broken",
+              "name": "broken",
+              "kind": "single",
+              "clipId": "clip-broken",
+              "loop": true,
+              "controlledParts": [
+                "*"
+              ]
+            }
+          ],
+          "transitions": []
+        }
+      ],
+      "bindings": [],
+      "listeners": [],
+      "audioEvents": [],
+      "semantics": {
+        "reducedMotionSafe": true
+      },
+      "sourceSvg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 220 200\" width=\"220\" height=\"200\"><g id=\"tail\"><path d=\"M60 150 L20 178 L64 168 Z\" fill=\"#333\"/></g><g id=\"body\"><ellipse cx=\"110\" cy=\"118\" rx=\"52\" ry=\"42\" fill=\"#444\"/></g><circle id=\"eye-left\" cx=\"146\" cy=\"56\" r=\"4.5\" fill=\"#fff\"/></svg>"
+    }
+  ]
+}

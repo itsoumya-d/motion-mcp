@@ -6,6 +6,9 @@ import {
   type CritiqueCheck,
   type MotionCritique
 } from "./checks.js";
+import { lintCurves } from "./curve-lint.js";
+import { resolveJudgeProvider, type DecodedFrameInput, type JudgeContext } from "./judge.js";
+import { DEFAULT_RUBRIC, checkConfig, type MotionRubric } from "./rubric.js";
 
 export interface RenderCritiqueOptions {
   state?: string;
@@ -13,6 +16,15 @@ export interface RenderCritiqueOptions {
   /** Sample count for raster checks. Default 6. */
   maxFrames?: number;
   width?: number;
+}
+
+/** Full-critique options: rubric-driven, with an optional vision judge. */
+export interface CritiqueOptions extends RenderCritiqueOptions {
+  rubric?: MotionRubric;
+  /** Vision judge; defaults to the rubric's provider (mock). Pass `false` to disable judging. */
+  judge?: import("./judge.js").JudgeProvider | false;
+  judgeContext?: JudgeContext;
+  skipRender?: boolean;
 }
 
 export interface RenderCheckResult {
@@ -29,11 +41,10 @@ export interface RenderCheckResult {
  */
 export async function critiqueRenderedOutput(
   doc: SceneDoc,
-  options: RenderCritiqueOptions = {}
+  options: RenderCritiqueOptions & { rubric?: MotionRubric } = {}
 ): Promise<RenderCheckResult> {
-  const maxFrames = Math.min(Math.max(options.maxFrames ?? 6, 2), 24);
-  // Spread samples across the WHOLE clip: a fixed high fps would only see
-  // the first few ms of slow loops and misread them as static.
+  const rubric = options.rubric ?? DEFAULT_RUBRIC;
+  const maxFrames = Math.min(Math.max(options.maxFrames ?? rubric.render.maxFrames, 2), 24);
   const fps = options.fps ?? spreadFps(doc, options.state ?? "play", maxFrames);
   const { frames } = await renderSceneFrames(doc, {
     state: options.state,
@@ -41,20 +52,105 @@ export async function critiqueRenderedOutput(
     maxFrames,
     width: options.width
   });
-
-  const checks: CritiqueCheck[] = [];
   if (frames.length === 0) {
-    checks.push({
-      id: "render-static",
-      severity: "fail",
-      message: "Renderer produced no frames."
-    });
-    return { checks, frames: 0 };
+    return { checks: filterEmit(rubric, [{ id: "render-static", severity: "fail", message: "Renderer produced no frames." }]), frames: 0 };
+  }
+  const decodedFrames = frames.map((frame) => decodePng(frame.png));
+  return {
+    checks: rasterChecks(doc, decodedFrames, frames.length, rubric),
+    frames: frames.length
+  };
+}
+
+/**
+ * Full C1 review: structural analysis + curve lint + headless render critique
+ * + vision-judge pass — all configured by the rubric. One render pass feeds
+ * both the raster checks and the judge.
+ */
+export async function critiqueScene(doc: SceneDoc, options: CritiqueOptions = {}): Promise<MotionCritique> {
+  const rubric = options.rubric ?? DEFAULT_RUBRIC;
+
+  const structural = analyzeSceneMotion(doc, rubric);
+  const curve = lintCurves(doc, rubric);
+  let checks: CritiqueCheck[] = [...structural.checks, ...curve.checks];
+  if (options.skipRender) {
+    return scoreChecks(checks, rubric);
   }
 
-  const decodedFrames = frames.map((frame) => decodePng(frame.png));
+  let decodedFrames: DecodedFrameInput[] = [];
+  try {
+    const maxFrames = Math.min(Math.max(options.maxFrames ?? rubric.render.maxFrames, 2), 24);
+    const fps = options.fps ?? spreadFps(doc, options.state ?? "play", maxFrames);
+    const { frames } = await renderSceneFrames(doc, {
+      state: options.state,
+      fps,
+      maxFrames,
+      width: options.width
+    });
+    decodedFrames = frames.map((frame) => decodePng(frame.png));
+    checks.push(...rasterChecks(doc, decodedFrames, frames.length, rubric));
+  } catch (error) {
+    checks.push({
+      id: "render-static",
+      severity: "warn" as const,
+      message: `Render check skipped: ${error instanceof Error ? error.message : String(error)}`
+    });
+  }
+
+  if (options.judge !== false && checkConfig(rubric, "judge-aliveness").enabled) {
+    checks.push(await judgeCheck(decodedFrames, options, rubric, options.judge ?? resolveJudgeProvider(rubric.judge)));
+  }
+
+  return scoreChecks(checks, rubric);
+}
+
+async function judgeCheck(
+  decodedFrames: DecodedFrameInput[],
+  options: CritiqueOptions,
+  rubric: MotionRubric,
+  provider: import("./judge.js").JudgeProvider
+): Promise<CritiqueCheck> {
+  const config = checkConfig(rubric, "judge-aliveness");
+  try {
+    if (decodedFrames.length < 2) {
+      return {
+        id: "judge-aliveness",
+        severity: "pass",
+        message: "Judge skipped: fewer than two rendered frames."
+      };
+    }
+    const result = await provider.judge(decodedFrames, options.judgeContext ?? {});
+    return {
+      id: "judge-aliveness",
+      severity: result.passes ? "pass" : config.severity ?? "fail",
+      message: result.passes
+        ? `Vision judge (${result.provider}) aliveness ${result.alivenessScore}/100 ≥ threshold ${rubric.judge.alivenessThreshold}.`
+        : `Vision judge (${result.provider}) aliveness ${result.alivenessScore}/100 < threshold ${rubric.judge.alivenessThreshold}: ${result.notes.join(" ")}`,
+      evidence: `${result.provider}:${result.alivenessScore}`
+    };
+  } catch (error) {
+    return {
+      id: "judge-aliveness",
+      severity: "warn",
+      message: `Vision judge unavailable: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
+function rasterChecks(
+  doc: SceneDoc,
+  decodedFrames: DecodedFrameInput[],
+  frameCount: number,
+  rubric: MotionRubric
+): CritiqueCheck[] {
+  if (frameCount === 0) {
+    return filterEmit(rubric, [
+      { id: "render-static", severity: "fail", message: "Renderer produced no frames." }
+    ]);
+  }
+  const checks: CritiqueCheck[] = [];
   const maxPairwiseDiff = maxConsecutiveDiff(decodedFrames.map((decoded) => decoded.rgba));
-  if (maxPairwiseDiff < STATIC_DIFF_EPSILON && frames.length >= 3) {
+  if (maxPairwiseDiff < rubric.render.staticDiffEpsilon && frameCount >= 3) {
     // Hold-only clips legitimately produce identical frames; anything else
     // indicates tracks that never touch the artwork.
     const hasAnimationKeys = hasNonHoldTracks(doc);
@@ -65,60 +161,48 @@ export async function critiqueRenderedOutput(
         message: "Frames are static by design (hold keys only)."
       });
     } else {
-      checks.push({
-        id: "render-static",
-        severity: "fail",
-        message: `All ${frames.length} sampled frames are pixel-identical — tracks likely target missing part ids.`,
-        evidence: `max channel delta ${maxPairwiseDiff}`
-      });
+      checks.push(
+        ...(filterEmit(rubric, [
+          {
+            id: "render-static",
+            severity: "fail",
+            message: `All ${frameCount} sampled frames are pixel-identical — tracks likely target missing part ids.`,
+            evidence: `max channel delta ${maxPairwiseDiff}`
+          }
+        ]) as CritiqueCheck[])
+      );
     }
   }
 
   const blank = decodedFrames.filter((decoded) => isNearUniform(decoded.rgba));
-  if (blank.length === frames.length) {
-    checks.push({
-      id: "render-blank",
-      severity: "fail",
-      message: "Every sampled frame renders near-uniform (blank).",
-      evidence: `${blank.length}/${frames.length} blank`
-    });
+  if (blank.length === frameCount) {
+    checks.push(
+      ...(filterEmit(rubric, [
+        {
+          id: "render-blank",
+          severity: "fail",
+          message: "Every sampled frame renders near-uniform (blank).",
+          evidence: `${blank.length}/${frameCount} blank`
+        }
+      ]) as CritiqueCheck[])
+    );
   }
 
-  return { checks, frames: frames.length };
+  return checks;
 }
 
-/**
- * Full C1 review: structural analysis + headless render critique.
- */
-export async function critiqueScene(
-  doc: SceneDoc,
-  options: RenderCritiqueOptions & { skipRender?: boolean } = {}
-): Promise<MotionCritique> {
-  const structural = analyzeSceneMotion(doc);
-  if (options.skipRender) return structural;
-
-  let rendered: RenderCheckResult;
-  try {
-    rendered = await critiqueRenderedOutput(doc, options);
-  } catch (error) {
-    return {
-      ...structural,
-      ok: false,
-      checks: [
-        ...structural.checks,
-        {
-          id: "render-static",
-          severity: "warn" as const,
-          message: `Render check skipped: ${error instanceof Error ? error.message : String(error)}`
-        }
-      ]
-    };
+/** Applies rubric enablement/severity to candidate findings. */
+function filterEmit(
+  rubric: MotionRubric,
+  candidates: Array<CritiqueCheck & { severity: "fail" | "warn" }>
+): CritiqueCheck[] {
+  const out: CritiqueCheck[] = [];
+  for (const candidate of candidates) {
+    const config = checkConfig(rubric, candidate.id);
+    if (!config.enabled) continue;
+    out.push({ ...candidate, severity: config.severity ?? candidate.severity });
   }
-
-  const all = [...structural.checks, ...rendered.checks];
-  const report = scoreChecks(all);
-  const fails = all.filter((check) => check.severity === "fail").length;
-  return { ...report, ok: fails === 0 };
+  return out;
 }
 
 function hasNonHoldTracks(doc: SceneDoc): boolean {
@@ -131,9 +215,6 @@ function hasNonHoldTracks(doc: SceneDoc): boolean {
     )
   );
 }
-
-/** Below this mean channel delta, consecutive frames count as identical. */
-const STATIC_DIFF_EPSILON = 0.05;
 
 /**
  * Chooses an fps that spreads maxFrames across the target state's whole

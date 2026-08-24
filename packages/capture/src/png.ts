@@ -1,4 +1,4 @@
-import { inflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 
 export interface DecodedPng {
   width: number;
@@ -112,4 +112,66 @@ function concat(chunks: Uint8Array[]): Uint8Array {
     offset += chunk.length;
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// PNG encoding (RGBA8) — used to ship rendered frames to vision judges.
+// ---------------------------------------------------------------------------
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc = CRC_TABLE[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const head = new Uint8Array(4);
+  new DataView(head.buffer).setUint32(0, data.length, false);
+  const body = concat([new TextEncoder().encode(type), data]);
+  const crc = new Uint8Array(4);
+  new DataView(crc.buffer).setUint32(0, crc32(body), false);
+  return concat([head, body, crc]);
+}
+
+/** Encodes RGBA pixels as an 8-bit RGBA PNG with filter-0 scanlines. */
+export function encodePng(width: number, height: number, rgba: Uint8Array): Uint8Array {
+  if (rgba.length < width * height * 4) {
+    throw new Error("encodePng needs width*height*4 RGBA bytes");
+  }
+  const signature = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const header = new Uint8Array(13);
+  const headerView = new DataView(header.buffer);
+  headerView.setUint32(0, width, false);
+  headerView.setUint32(4, height, false);
+  header[8] = 8;
+  header[9] = 6;
+
+  const stride = width * 4;
+  const raw = new Uint8Array(height * (stride + 1));
+  for (let y = 0; y < height; y += 1) {
+    raw[y * (stride + 1)] = 0;
+    raw.set(rgba.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1);
+  }
+  const compressed = deflateSync(raw);
+
+  return concat([
+    signature,
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", compressed),
+    pngChunk("IEND", new Uint8Array(0))
+  ]);
 }

@@ -2,6 +2,7 @@ export { encodeGif, lzwEncode } from "./gif.js";
 export type { GifFrameInput } from "./gif.js";
 export { decodePng } from "./png.js";
 export type { DecodedPng } from "./png.js";
+export { encodePng } from "./png.js";
 export {
   captureSceneGif,
   renderSceneFrames

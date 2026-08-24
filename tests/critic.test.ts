@@ -169,7 +169,7 @@ test("auto-fix repairs sort/clamp/seam and improves the score", () => {
         keys: [
           { t: 400, value: 0.9 },
           { t: 0, value: 1.7 },
-          { t: 800, value: 0.1 }
+          { t: 700, value: 0.1 }
         ]
       })
     ]
@@ -182,7 +182,7 @@ test("auto-fix repairs sort/clamp/seam and improves the score", () => {
   assert.ok(result.applied.length >= 2, result.applied.join("; "));
   const after = analyzeSceneMotion(result.doc);
 
-  const clipAfter = Object.values(after.checks.length ? result.doc.artboards[0]!.clips : {})[0]!;
+  const clipAfter = Object.values(result.doc.artboards[0]!.clips)[0]!;
   const keysAfter = clipAfter.tracks[0]!.keys;
   for (let i = 1; i < keysAfter.length; i += 1) {
     assert.ok(keysAfter[i]!.t >= keysAfter[i - 1]!.t, "keys now sorted");
