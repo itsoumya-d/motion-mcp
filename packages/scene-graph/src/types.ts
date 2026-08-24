@@ -50,6 +50,24 @@ export interface SceneArtboard {
   semantics?: SceneSemantics;
   /** Optional character rig (SceneDoc v1 extension — backward compatible). */
   rig?: SceneRig;
+  /** Optional personality parameters driving procedural motion style (SceneDoc v1 extension). */
+  temperament?: SceneTemperament;
+}
+
+/**
+ * Personality primitive: four axes in [0,1] that procedurally shape easing,
+ * overshoot, squash/stretch, and secondary motion for any rigged asset.
+ * SceneDoc v1 additive extension — resolved by resolveTemperament().
+ */
+export interface SceneTemperament {
+  /** Pace and snap. High = fast, springy, punchy. Low = slow, languid. */
+  energy: number;
+  /** Mass illusion. High = heavy landings, deep squash, low overshoot. Low = floaty. */
+  weight: number;
+  /** Ambient liveliness. High = strong breathe/sway/blink secondary motion. */
+  warmth: number;
+  /** Mechanical tightness. High = minimal stagger, easeInOut bias, no overshoot. */
+  precision: number;
 }
 
 /**
@@ -74,6 +92,8 @@ export interface SceneBone {
   origin: { x: number; y: number };
   length?: number;
   restRotationDeg?: number;
+  /** Per-part influence in [0,1] (auto-weight output; SceneDoc v1 extension). */
+  weights?: Record<string, number>;
 }
 
 export interface SceneIkChain {

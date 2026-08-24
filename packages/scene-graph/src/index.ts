@@ -18,6 +18,7 @@ export type {
   SceneSemantics,
   SceneState,
   SceneStateMachine,
+  SceneTemperament,
   SceneTrack,
   SceneTransition
 } from "./types.js";
@@ -32,3 +33,11 @@ export {
 export { compileAmbientLifeScene } from "./ambient.js";
 export type { MotionDocJson, SceneValidationResult } from "./compile.js";
 export type { AmbientLifeSpec } from "./ambient.js";
+export {
+  TEMPERAMENT_PRESETS,
+  applyTemperamentToClip,
+  applyTemperamentToDoc,
+  resolveTemperament,
+  temperamentProfile
+} from "./temperament.js";
+export type { TemperamentMotionProfile } from "./temperament.js";

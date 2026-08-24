@@ -272,11 +272,53 @@ export interface MotionProperty {
   source: "app-state" | "route-state" | "form-state" | "game-state" | "design-token" | "motion";
 }
 
+export type MotionConverterKind = "map-range" | "threshold" | "format";
+
+export interface MotionConverter {
+  kind: MotionConverterKind;
+  inMin?: number;
+  inMax?: number;
+  outMin?: number;
+  outMax?: number;
+  clamp?: boolean;
+  threshold?: number;
+  onValue?: string | number | boolean;
+  offValue?: string | number | boolean;
+  template?: string;
+  description?: string;
+}
+
 export interface MotionBinding {
   property: string;
   targetPart: string;
   source: MotionProperty["source"];
   description: string;
+  converter?: MotionConverter;
+}
+
+export function evaluateMotionConverter(
+  converter: MotionConverter,
+  input: string | number | boolean
+): string | number | boolean {
+  if (converter.kind === "map-range") {
+    const value = typeof input === "number" ? input : Number(input);
+    if (!Number.isFinite(value)) return converter.offValue ?? 0;
+    const inMin = converter.inMin ?? 0;
+    const inMax = converter.inMax ?? 1;
+    const outMin = converter.outMin ?? 0;
+    const outMax = converter.outMax ?? 1;
+    const spanIn = inMax - inMin || 1e-9;
+    let u = (value - inMin) / spanIn;
+    if (converter.clamp !== false) u = Math.min(1, Math.max(0, u));
+    return outMin + (outMax - outMin) * u;
+  }
+  if (converter.kind === "threshold") {
+    const value = typeof input === "number" ? input : Number(input);
+    const on = Number.isFinite(value) && value >= (converter.threshold ?? 1);
+    return on ? (converter.onValue ?? true) : (converter.offValue ?? false);
+  }
+  const template = converter.template ?? "{value}";
+  return template.replaceAll("{value}", String(input));
 }
 
 export interface MotionViewModel {

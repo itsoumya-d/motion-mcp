@@ -381,6 +381,22 @@ function validateArtboard(artboard: SceneArtboard, errors: string[]): void {
     if (layerIds.has(layer.layerId)) errors.push(`${prefix} duplicate layerId ${layer.layerId}`);
     layerIds.add(layer.layerId);
   }
+  validateTemperament(artboard, prefix, errors);
+  for (const binding of artboard.bindings) {
+    if (!binding.converter) continue;
+    if (binding.converter.kind === "map-range") {
+      const { inMin, inMax, outMin, outMax } = binding.converter;
+      if ([inMin, inMax, outMin, outMax].some((value) => value === undefined)) {
+        errors.push(`${prefix} binding ${binding.property} uses map-range but is missing inMin/inMax/outMin/outMax`);
+      }
+    }
+    if (binding.converter.kind === "threshold" && binding.converter.threshold === undefined) {
+      errors.push(`${prefix} binding ${binding.property} uses threshold but has no threshold value`);
+    }
+    if (binding.converter.kind === "format" && !binding.converter.template?.includes("{value}")) {
+      errors.push(`${prefix} binding ${binding.property} uses format but its template lacks {value}`);
+    }
+  }
   const machineIds = new Set<string>();
   for (const machine of artboard.stateMachines) {
     if (machineIds.has(machine.stateMachineId)) {
@@ -406,6 +422,17 @@ function validateArtboard(artboard: SceneArtboard, errors: string[]): void {
       if (!stateIds.has(transition.toStateId)) {
         errors.push(`${prefix} transition ${transition.transitionId} references missing to-state ${transition.toStateId}`);
       }
+    }
+  }
+}
+
+function validateTemperament(artboard: SceneArtboard, prefix: string, errors: string[]): void {
+  const temperament = artboard.temperament;
+  if (!temperament) return;
+  for (const axis of ["energy", "weight", "warmth", "precision"] as const) {
+    const value = temperament[axis];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+      errors.push(`${prefix} temperament.${axis} must be a finite number in [0,1] (found ${value})`);
     }
   }
 }
