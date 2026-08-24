@@ -5,7 +5,7 @@
 **The AI-native motion engine for coding agents — a codebase-aware alternative to Rive's closed pipeline.**
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)](./tests)
+[![Tests](https://img.shields.io/badge/tests-207%20passing-brightgreen.svg)](./tests)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg)](https://www.typescriptlang.org/)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-native-8A2BE2.svg)](https://modelcontextprotocol.io)
 [![Targets](https://img.shields.io/badge/targets-React_·_RN_·_Flutter_·_Unity-ff69b4.svg)](#what-it-builds)
