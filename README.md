@@ -5,7 +5,7 @@
 **The AI-native motion engine for coding agents — a codebase-aware alternative to Rive's closed pipeline.**
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-194%20passing-brightgreen.svg)](./tests)
+[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)](./tests)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg)](https://www.typescriptlang.org/)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-native-8A2BE2.svg)](https://modelcontextprotocol.io)
 [![Targets](https://img.shields.io/badge/targets-React_·_RN_·_Flutter_·_Unity-ff69b4.svg)](#what-it-builds)
@@ -33,6 +33,7 @@ Motion MCP closed the loop that separates it from every generate-and-hope tool i
 | **Perception engine** | PNG → quantized paint-region parts → rig proposals through the standard auto-rigger; glTF 2.0 skins → exact joint hierarchy with per-joint weight stats; unskinned meshes → inferred band chains |
 | **Generation engine** | Deterministic NL intent lexicon (10 verbs × speed/intensity/direction/loop) driving temperament-parameterized procedural synthesis — easing, overshoot, squash-and-stretch and stagger all derive from four personality axes, self-checked before returning |
 | **Export-parity gate** | `verify_cross_runtime` bakes a state through both renderable targets (animated SVG + Lottie) and proves every stop time survived — catches exporter drift before it ships |
+| **Video-to-rig (`vectorize_video`)** | Cross-frame part tracking over flipbook keyframes (deterministic IoU + centroid matching) infers a SceneDoc bone hierarchy from any moving video — returned as a reviewable `rigProposal`; degenerate tracking stays pure flipbook and reports why |
 
 Schema evolved without breaking anyone: `temperament`, binding converters (Rive-view-model-style), and per-bone weights are additive SceneDoc v1 extensions under a documented versioning contract ([`docs/scenedoc-v1-extensions.md`](./docs/scenedoc-v1-extensions.md)).
 
@@ -76,7 +77,7 @@ Motion MCP's wedge is the pieces neither ships:
 | Original asset generation | ❌ | explicitly declined | ✅ simple lane (host model) / premium lane (structured SVG) |
 | Agent-controllable surface | ❌ | ✅ tool calls | ✅ 52 tools; agent plans *and* executes the loop |
 
-Honest scope notes for evaluators: video tracing today produces layered-flipbook SceneDocs (contour-traced keyframes with temporal reduction); pose-tracked auto-rigging *from video* is roadmap, not shipped. Asset generation produces structured vector SVG — not raster diffusion illustration. And unlike RiveMCP's 267 runtime types, we don't target `.riv` output at all: SceneDoc compiles to native host-framework code, while `import_riv` reads `.riv` in.
+Honest scope notes for evaluators: video tracing produces layered-flipbook SceneDocs (contour-traced keyframes with temporal reduction), and since the video-to-rig milestone it also tracks parts across those keyframes (IoU + centroid matching) to attach an inferred SceneDoc rig — returned as a reviewable `rigProposal` on `vectorize_video`, with degenerate tracking staying pure flipbook and saying why. This is deterministic contour tracking, not neural pose estimation: occlusion and same-color merges can still confuse part identity. Asset generation produces structured vector SVG — not raster diffusion illustration. And unlike RiveMCP's 267 runtime types, we don't target `.riv` output at all: SceneDoc compiles to native host-framework code, while `import_riv` reads `.riv` in.
 
 **Anim8 is where you animate by hand. Rive MCP builds what you specify. Motion MCP plans, generates, verifies, and ships.**
 
@@ -264,7 +265,7 @@ graph TD
 | `exporters` | Lottie JSON writer (bezier paths incl. arc→cubic) · CSS-keyframe animated SVG |
 | `riv-importer` | Rive binary reader + structural/keyframe/geometry decoder using rive-runtime's core type keys — paths → SVG, KeyFrameDoubles → SceneClips, SM graphs → topology |
 | `figma-bridge` | Figma import bridge: thin plugin collector (frames, elements, prototype reactions) → plain-JSON snapshot → synthesized SceneDoc artboards with per-state pose clips; entry frame renders to layered SVG |
-| `vectorizer` | Video → vector animation, fully local: ffmpeg frame extraction, median-cut palette quantization, contour boundary tracing (with hole loops), temporal frame reduction → playable flipbook SceneDoc |
+| `vectorizer` | Video → vector animation, fully local: ffmpeg frame extraction, median-cut palette quantization, contour boundary tracing (with hole loops), temporal frame reduction, cross-frame IoU part tracking → playable flipbook SceneDoc with inferred rigs |
 | `critic` | Deterministic motion critique: structural checks (key order, value bounds, loop seams, micro-jitter, reduced-motion), headless raster checks (static/blank frames), 0–100 scoring, and safe auto-fixes |
 | `capture` | PNG decoder (zlib + all scanline filters) · GIF89a encoder (exact/popularity palette, LZW) · ffmpeg MP4/WebM assembly · resvg frame pipeline |
 | `ast-patcher` | Surgical import/usage patches via the TypeScript compiler API |
