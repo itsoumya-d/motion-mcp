@@ -7,6 +7,7 @@ import {
   type SceneTrack
 } from "@motion-mcp/scene-graph";
 import { colorToHex, quantizeFrame, type QuantizeResult } from "./quantize.js";
+import type { Point } from "./trace.js";
 import { simplifyLoop, traceColorMask } from "./trace.js";
 
 export interface VectorizeOptions {
@@ -20,6 +21,8 @@ export interface VectorizeOptions {
   minAreaPx?: number;
   /** Re-emit an identical-looking frame after this gap so long pauses tick. Default 1000. */
   staticGapMs?: number;
+  /** Retain per-kept-frame traced loops for downstream part tracking. Default false. */
+  keepTraces?: boolean;
 }
 
 export interface FlipbookResult {
@@ -31,6 +34,12 @@ export interface FlipbookResult {
   width: number;
   height: number;
   frameTimesMs: number[];
+  /**
+   * Per-kept-frame traced loops (part segmentation before SVG emission).
+   * Only populated when `keepTraces` is set — consumed by cross-frame
+   * part tracking for video-to-rig inference.
+   */
+  traces?: Array<{ tMs: number; loops: Point[][] }>;
 }
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -48,6 +57,7 @@ export function vectorizeFrames(pngs: Uint8Array[], options: VectorizeOptions = 
   const epsilon = options.epsilon ?? 1;
   const minArea = options.minAreaPx ?? 6;
   const staticGapMs = options.staticGapMs ?? 1000;
+  const keepTraces = options.keepTraces ?? false;
 
   if (pngs.length === 0) throw new Error("vectorizeFrames needs at least one frame");
 
@@ -55,6 +65,7 @@ export function vectorizeFrames(pngs: Uint8Array[], options: VectorizeOptions = 
     index: number;
     tMs: number;
     groups: string[];
+    loops: Point[][];
     signature: number;
     quantized: QuantizeResult;
   }
@@ -71,6 +82,7 @@ export function vectorizeFrames(pngs: Uint8Array[], options: VectorizeOptions = 
 
     // Per-color masks → contours → simplified path data.
     const pathsByColor = new Map<number, string[]>();
+    const frameLoops: Point[][] = [];
     for (let colorIndex = 0; colorIndex < quantized.palette.length; colorIndex += 1) {
       const mask = new Uint8Array(decoded.width * decoded.height);
       for (let pixel = 0; pixel < quantized.indices.length; pixel += 1) {
@@ -83,6 +95,7 @@ export function vectorizeFrames(pngs: Uint8Array[], options: VectorizeOptions = 
         if (area < minArea) continue;
         const simplified = simplifyLoop(loop, epsilon);
         paths.push({ area, d: loopToPath(simplified) });
+        frameLoops.push(simplified);
       }
       // Large regions paint first so smaller shapes layer on top.
       paths.sort((a, b) => b.area - a.area);
@@ -103,6 +116,7 @@ export function vectorizeFrames(pngs: Uint8Array[], options: VectorizeOptions = 
       index,
       tMs: Math.round((index * 1000) / fps),
       groups: groupMarkup,
+      loops: frameLoops,
       signature: signatureOf(quantized),
       quantized
     });
@@ -204,7 +218,10 @@ export function vectorizeFrames(pngs: Uint8Array[], options: VectorizeOptions = 
     paletteSize: reduced[0]!.quantized.palette.length,
     width,
     height,
-    frameTimesMs: reduced.map((frame) => frame.tMs)
+    frameTimesMs: reduced.map((frame) => frame.tMs),
+    traces: keepTraces
+      ? reduced.map((frame) => ({ tMs: frame.tMs, loops: frame.loops.map((loop) => loop.map((point) => ({ ...point }))) }))
+      : undefined
   };
 }
 

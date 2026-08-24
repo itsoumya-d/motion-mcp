@@ -68,7 +68,7 @@ import type { SceneDoc } from "@motion-mcp/scene-graph";
 import { extractStructure, importRiv, toSceneSkeleton } from "@motion-mcp/riv-importer";
 import { toAnimatedSvg, toLottie } from "@motion-mcp/exporters";
 import { captureSceneGif, renderSceneFrames, assembleVideo, hasFfmpeg } from "@motion-mcp/capture";
-import { extractVideoFrames, vectorizeFrames } from "@motion-mcp/vectorizer";
+import { extractVideoFrames, trackPartsAcrossFrames, vectorizeFrames } from "@motion-mcp/vectorizer";
 import { critiqueScene } from "@motion-mcp/critic";
 import type { SceneArtboard } from "@motion-mcp/scene-graph";
 import type { StateMachineExperienceResult } from "@motion-mcp/shared-types";
@@ -90,6 +90,7 @@ import {
 } from "./internals.js";
 import { loadSceneForAsset, sceneForPlanItem } from "./scene-source.js";
 import { reviewAnimation } from "./review.js";
+import { attachVideoRig } from "./video-rig.js";
 import { importFigmaScene } from "./figma-import.js";
 import { ensoulAsset } from "./ensoul.js";
 import {
@@ -830,7 +831,7 @@ server.registerTool(
   {
     title: "Vectorize video",
     description:
-      "Convert a video into a vector flipbook animation (Anim8-style video-to-SVG, fully local): ffmpeg extracts frames, median-cut quantization and contour tracing build layered SVG keyframes, temporal reduction collapses identical frames. Stages an indexed, playable SceneDoc asset as a reviewable diff.",
+      "Convert a video into a vector flipbook animation (Anim8-style video-to-SVG, fully local): ffmpeg extracts frames, median-cut quantization and contour tracing build layered SVG keyframes, temporal reduction collapses identical frames. When cross-frame tracking finds multiple parts with motion, an inferred SceneDoc rig is attached and returned as a reviewable rigProposal; degenerate tracking stays pure flipbook and says why. Stages an indexed, playable SceneDoc asset as a reviewable diff.",
     inputSchema: {
       rootPath: z.string().optional(),
       videoPath: z.string().describe("Path to the video file, relative to the project root."),
@@ -2224,6 +2225,14 @@ async function vectorizeVideoAsset(
   width: number;
   height: number;
   frameTimesMs: number[];
+  /** Reviewable video-to-rig proposal; absent when tracking never ran. */
+  rigProposal?: {
+    partsTracked: number;
+    bonesProposed: number;
+    stillParts: string[];
+    skippedReason?: string;
+    bones: Array<{ boneId: string; name: string; parentBoneId?: string; targetParts: string[] }>;
+  };
   previewUrl: string;
   nextTools: string[];
 }> {
@@ -2237,8 +2246,23 @@ async function vectorizeVideoAsset(
   const result = vectorizeFrames(frames, {
     fps: input.fps,
     maxColors: input.maxColors,
-    maxKeyframes: input.maxKeyframes
+    maxKeyframes: input.maxKeyframes,
+    keepTraces: true
   });
+
+  // Video-to-rig: track parts across kept keyframes and infer a minimal
+  // bone hierarchy. Degenerate tracking leaves the doc flipbook-only and
+  // reports why instead of attaching a wrong rig.
+  const tracked = result.traces
+    ? trackPartsAcrossFrames(result.traces, {
+        canvas: { width: result.width, height: result.height }
+      })
+    : null;
+  const rigProposal = tracked
+    ? attachVideoRig(result.doc, tracked.parts, {
+        canvas: { width: result.width, height: result.height }
+      })
+    : undefined;
 
   const base = path.basename(input.videoPath, path.extname(input.videoPath));
   const relativeSvg = `.motion-mcp/generated-assets/${slugify(base)}-flipbook.svg`;
@@ -2295,6 +2319,13 @@ async function vectorizeVideoAsset(
     width: result.width,
     height: result.height,
     frameTimesMs: result.frameTimesMs,
+    rigProposal: rigProposal ? {
+      partsTracked: rigProposal.partsTracked,
+      bonesProposed: rigProposal.bonesProposed,
+      stillParts: rigProposal.stillParts,
+      skippedReason: rigProposal.skippedReason,
+      bones: rigProposal.bones
+    } : undefined,
     previewUrl: `file://${previewPath}`,
     nextTools: ["capture_gif", "generate_animation"]
   };
