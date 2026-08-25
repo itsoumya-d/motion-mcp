@@ -16,5 +16,21 @@
   },
   "dependencies": {
     "@motion-mcp/scene-graph": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itsoumya-d/motion-mcp.git",
+    "directory": "packages/riv-importer"
+  },
+  "homepage": "https://github.com/itsoumya-d/motion-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/itsoumya-d/motion-mcp/issues"
+  },
+  "license": "Apache-2.0",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -48,5 +48,20 @@
     "@motion-mcp/validator": "workspace:*",
     "@motion-mcp/vectorizer": "workspace:*",
     "zod": "^3.24.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itsoumya-d/motion-mcp.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/itsoumya-d/motion-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/itsoumya-d/motion-mcp/issues"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

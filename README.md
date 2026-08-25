@@ -38,6 +38,8 @@ Motion MCP closed the loop that separates it from every generate-and-hope tool i
 
 Schema evolved without breaking anyone: `temperament`, binding converters (Rive-view-model-style), and per-bone weights are additive SceneDoc v1 extensions under a documented versioning contract ([`docs/scenedoc-v1-extensions.md`](./docs/scenedoc-v1-extensions.md)).
 
+**Docs**: [Getting started](./docs/getting-started.md) · [Tool reference (52 tools)](./docs/tool-reference.md) · [SceneDoc spec](./docs/scenedoc-spec.md) · [HF Spaces deploy](./docs/DEPLOY-HF-SPACE.md)
+
 ---
 
 ## Why not just use Rive?
@@ -563,11 +565,19 @@ Remaining:
 
 5. Dynamic context engine (live re-index on file change)
 6. Critique agent + motion-grammar dataset from accept/reject/edit telemetry
-7. Stripe + Supabase billing mirror · hosted preview links · CI
+7. Stripe + Supabase billing mirror · hosted preview links (CI and npm publishing are live — see `.github/workflows/`)
 8. Pixel-level visual cross-runtime diffing (headless Lottie renderer; stop-parity already enforced by `verify_cross_runtime`)
 9. Pose-tracked rigging from video (BlazePose → bone hierarchy)
 
 ---
+
+## Contributing & Security
+
+PRs welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for the ground rules
+(determinism, staged-diff review, honest receipts) and the release process.
+Security policy and threat model: [SECURITY.md](./SECURITY.md). Environment
+reference: [.env.example](./.env.example). Release history:
+[CHANGELOG.md](./CHANGELOG.md).
 
 ## License
 

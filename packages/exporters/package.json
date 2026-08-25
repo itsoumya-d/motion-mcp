@@ -18,5 +18,21 @@
     "@motion-mcp/scene-graph": "workspace:*",
     "@motion-mcp/shared-types": "workspace:*",
     "@motion-mcp/svg-parser": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itsoumya-d/motion-mcp.git",
+    "directory": "packages/exporters"
+  },
+  "homepage": "https://github.com/itsoumya-d/motion-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/itsoumya-d/motion-mcp/issues"
+  },
+  "license": "Apache-2.0",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

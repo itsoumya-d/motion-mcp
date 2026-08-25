@@ -20,5 +20,20 @@
     "@motion-mcp/codebase-scanner": "workspace:*",
     "@motion-mcp/shared-types": "workspace:*",
     "@motion-mcp/state-machine-researcher": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itsoumya-d/motion-mcp.git",
+    "directory": "packages/auto-researcher"
+  },
+  "homepage": "https://github.com/itsoumya-d/motion-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/itsoumya-d/motion-mcp/issues"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

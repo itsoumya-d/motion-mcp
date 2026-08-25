@@ -19,5 +19,20 @@
     "@motion-mcp/asset-indexer": "workspace:*",
     "@motion-mcp/codebase-scanner": "workspace:*",
     "@motion-mcp/shared-types": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itsoumya-d/motion-mcp.git",
+    "directory": "packages/motion-planner"
+  },
+  "homepage": "https://github.com/itsoumya-d/motion-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/itsoumya-d/motion-mcp/issues"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

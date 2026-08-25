@@ -1,5 +1,5 @@
 {
-  "scenePath": "/Users/soumyadebnath16/Developer/motion-mcp/examples/verify-loop/broken-scene.json",
+  "scenePath": "<repo>/examples/verify-loop/broken-scene.json",
   "ok": true,
   "docChanged": true,
   "attempts": [
@@ -83,5 +83,5 @@
     "fixes": [],
     "summary": "All motion-quality checks passed."
   },
-  "repairedDocPath": "/Users/soumyadebnath16/Developer/motion-mcp/examples/verify-loop/broken-scene.repaired.json"
+  "repairedDocPath": "<repo>/examples/verify-loop/broken-scene.repaired.json"
 }
