@@ -69,6 +69,7 @@ import { extractStructure, importRiv, toSceneSkeleton } from "@motion-mcp/riv-im
 import { toAnimatedSvg, toLottie } from "@motion-mcp/exporters";
 import { captureSceneGif, renderSceneFrames, assembleVideo, hasFfmpeg } from "@motion-mcp/capture";
 import { extractVideoFrames, trackPartsAcrossFrames, vectorizeFrames } from "@motion-mcp/vectorizer";
+import { motionCurvesFromTracks } from "./motion-curves.js";
 import { critiqueScene } from "@motion-mcp/critic";
 import type { SceneArtboard } from "@motion-mcp/scene-graph";
 import type { StateMachineExperienceResult } from "@motion-mcp/shared-types";
@@ -845,6 +846,56 @@ server.registerTool(
     const root = resolveRoot(rootPath);
     await consumeCredits(root, { amount: 15, reason: "vectorize_video" });
     return jsonResult(await vectorizeVideoAsset(root, { videoPath, fps, width, maxColors, maxKeyframes }));
+  }
+);
+
+const FrameSampleSchema = z.object({
+  partId: z.string(),
+  tMs: z.number().min(0),
+  centroid: z.object({ x: z.number(), y: z.number() }),
+  bbox: z.object({
+    minX: z.number(),
+    minY: z.number(),
+    maxX: z.number(),
+    maxY: z.number()
+  }),
+  loop: z.array(z.object({ x: z.number(), y: z.number() })).optional(),
+  fill: z.string().optional()
+});
+
+server.registerTool(
+  "motion_to_curves",
+  {
+    title: "Motion to curves",
+    description:
+      "Turn tracked part trajectories (e.g. from vectorize_video's cross-frame tracking) into eased translateX/translateY motion over persistent per-part layers: an indexed playable SceneDoc plus a standalone animated SVG preview, staged as a reviewable diff. Offsets are relative to each part's base pose; throws on degenerate input instead of staging an empty clip.",
+    inputSchema: {
+      rootPath: z.string().optional(),
+      parts: z.array(z.object({
+        partId: z.string().describe("Stable part id, e.g. part-01 from tracking."),
+        label: z.string().optional(),
+        frames: z.array(FrameSampleSchema).min(1).describe("Chronological centroid/bbox samples per keyframe."),
+        displacementPx: z.number().optional().describe("Max pairwise centroid distance in px; parts at 0 stay static layers.")
+      })).min(1).describe("Tracked part trajectories."),
+      partsSvg: z.string().optional().describe("SVG fragment with persistent <g id=\"part-id\"> layers. Omit for geometry-less motion."),
+      sourceLabel: z.string().optional().describe("Provenance label used in filenames and summaries."),
+      easing: z.enum(["linear", "easeIn", "easeOut", "easeInOut", "hold", "spring"]).optional().describe("Segment easing between samples. Default easeInOut.")
+    }
+  },
+  async ({ rootPath, parts, partsSvg, sourceLabel, easing }) => {
+    const root = resolveRoot(rootPath);
+    await consumeCredits(root, { amount: 8, reason: "motion_to_curves" });
+    return jsonResult(await motionCurvesFromTracks(root, {
+      parts: parts.map((part) => ({
+        partId: part.partId,
+        label: part.label ?? "",
+        frames: part.frames,
+        displacementPx: part.displacementPx ?? 0
+      })),
+      partsSvg,
+      sourceLabel,
+      easing
+    }));
   }
 );
 

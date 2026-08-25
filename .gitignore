@@ -14,6 +14,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+.hermes/
 .motion-mcp/
 .motion-mcp/diffs/
 .motion-mcp/credits.json

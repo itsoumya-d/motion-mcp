@@ -5,7 +5,7 @@
 **The AI-native motion engine for coding agents — a codebase-aware alternative to Rive's closed pipeline.**
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-207%20passing-brightgreen.svg)](./tests)
+[![CI](https://github.com/itsoumya-d/motion-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/itsoumya-d/motion-mcp/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg)](https://www.typescriptlang.org/)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-native-8A2BE2.svg)](https://modelcontextprotocol.io)
 [![Targets](https://img.shields.io/badge/targets-React_·_RN_·_Flutter_·_Unity-ff69b4.svg)](#what-it-builds)
@@ -21,7 +21,7 @@ Motion MCP plugs into Codex, Claude Code, Cursor, or any MCP-compatible agent an
 
 ## What's new — the verification-first milestone (Aug 2026)
 
-Motion MCP closed the loop that separates it from every generate-and-hope tool in this space. 38 → **52 MCP tools**, 154 → **194 tests**, 27 → **29 packages**:
+Motion MCP closed the loop that separates it from every generate-and-hope tool in this space. 38 → **52 MCP tools**, 154 → **213 tests**, 27 → **29 packages**:
 
 | Capability | What landed |
 |---|---|
@@ -34,6 +34,7 @@ Motion MCP closed the loop that separates it from every generate-and-hope tool i
 | **Generation engine** | Deterministic NL intent lexicon (10 verbs × speed/intensity/direction/loop) driving temperament-parameterized procedural synthesis — easing, overshoot, squash-and-stretch and stagger all derive from four personality axes, self-checked before returning |
 | **Export-parity gate** | `verify_cross_runtime` bakes a state through both renderable targets (animated SVG + Lottie) and proves every stop time survived — catches exporter drift before it ships |
 | **Video-to-rig (`vectorize_video`)** | Cross-frame part tracking over flipbook keyframes (deterministic IoU + centroid matching) infers a SceneDoc bone hierarchy from any moving video — returned as a reviewable `rigProposal`; degenerate tracking stays pure flipbook and reports why |
+| **Video-motion smoothing (`motion_to_curves`)** | Tracked part trajectories become eased translateX/Y SceneDoc tracks over persistent per-part layers, plus a standalone animated SVG preview — smooth motion at low keyframe counts instead of flipbook cuts, staged as a reviewable diff with deterministic ids |
 
 Schema evolved without breaking anyone: `temperament`, binding converters (Rive-view-model-style), and per-bone weights are additive SceneDoc v1 extensions under a documented versioning contract ([`docs/scenedoc-v1-extensions.md`](./docs/scenedoc-v1-extensions.md)).
 
@@ -421,7 +422,7 @@ Each stage also stands alone as its own tool, so agents can compose or override 
 ## Quality gates: conformance, goldens, determinism
 
 ```bash
-pnpm test          # node --test — 194 tests across 34 suites
+pnpm test          # node --test — 213 tests across 42 suites
 pnpm typecheck     # strict TS across all 29 packages
 pnpm build         # topological build
 ```
