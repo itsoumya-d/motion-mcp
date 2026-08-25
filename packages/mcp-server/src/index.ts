@@ -2,6 +2,7 @@
 import { promises as fs } from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -2640,6 +2641,7 @@ async function listMotionBindings(root: string, componentId?: string): Promise<u
 async function startHttpBridge(): Promise<void> {
   const port = Number.parseInt(process.env.MOTION_MCP_HTTP_PORT ?? "", 10);
   if (!port) return;
+  const httpToken = process.env.MOTION_MCP_HTTP_TOKEN || undefined;
   const handlers: Record<string, (payload: any) => Promise<unknown>> = {
     scan_codebase: ({ rootPath }) => scanCodebase(resolveRoot(rootPath)),
     scan_assets: ({ rootPath }) => scanAssets(resolveRoot(rootPath)),
@@ -2805,6 +2807,28 @@ async function startHttpBridge(): Promise<void> {
     purchase_credits_url: async () => purchaseCreditsUrl()
   };
   const bridge = http.createServer(async (req, res) => {
+    if (req.method === "GET" && req.url?.split("?")[0] === "/health") {
+      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (req.method === "GET" && req.url?.split("?")[0] === "/.well-known/mcp") {
+      res.writeHead(200, { "content-type": "application/json" }).end(
+        JSON.stringify({
+          serverInfo: { name: "motion-mcp", version: "0.1.0" },
+          transport: "http-tool-bridge",
+          tools: Object.keys(handlers).sort()
+        })
+      );
+      return;
+    }
+    if (httpToken && !requestAuthorized(req, httpToken)) {
+      res.writeHead(401, { "www-authenticate": "Bearer" }).end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+    if (!requestAllowed(req.socket.remoteAddress ?? "unknown")) {
+      res.writeHead(429).end(JSON.stringify({ error: "rate limited" }));
+      return;
+    }
     if (req.method !== "POST" || !req.url?.startsWith("/tool/")) {
       res.writeHead(404).end("Not found");
       return;
@@ -2820,20 +2844,38 @@ async function startHttpBridge(): Promise<void> {
       const result = await handler(payload);
       res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(result));
     } catch (error) {
+      const status = error instanceof BodyLimitError ? 413 : 500;
       res
-        .writeHead(500, { "content-type": "application/json" })
+        .writeHead(status, { "content-type": "application/json" })
         .end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
     }
   });
-  bridge.listen(port, () => {
-    console.error(`motion-mcp HTTP bridge listening on http://127.0.0.1:${port}`);
+  const host = process.env.MOTION_MCP_HTTP_HOST ?? "127.0.0.1";
+  bridge.listen(port, host, () => {
+    console.error(`motion-mcp HTTP bridge listening on http://${host}:${port}`);
+    if (host !== "127.0.0.1" && !httpToken) {
+      console.error(
+        "motion-mcp HTTP bridge is network-exposed without MOTION_MCP_HTTP_TOKEN; set one before hosting beyond localhost."
+      );
+    }
   });
 }
 
+const HTTP_BODY_LIMIT_BYTES = 1024 * 1024;
+
+class BodyLimitError extends Error {}
+
 function readRequestJson(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
+    let size = 0;
     let body = "";
     req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > HTTP_BODY_LIMIT_BYTES) {
+        reject(new BodyLimitError(`Request body exceeds ${HTTP_BODY_LIMIT_BYTES} bytes.`));
+        req.destroy();
+        return;
+      }
       body += chunk.toString();
     });
     req.on("end", () => {
@@ -2845,6 +2887,31 @@ function readRequestJson(req: http.IncomingMessage): Promise<unknown> {
     });
     req.on("error", reject);
   });
+}
+
+function requestAuthorized(req: http.IncomingMessage, token: string): boolean {
+  const header = req.headers.authorization ?? "";
+  const prefix = "Bearer ";
+  if (!header.startsWith(prefix)) return false;
+  const presented = Buffer.from(header.slice(prefix.length), "utf8");
+  const expected = Buffer.from(token, "utf8");
+  return presented.length === expected.length && timingSafeEqual(presented, expected);
+}
+
+const RATE_WINDOW_MS = 60_000;
+const rateBuckets = new Map<string, { count: number; windowStart: number }>();
+
+function requestAllowed(clientKey: string): boolean {
+  const perMinute = Number.parseInt(process.env.MOTION_MCP_HTTP_RATE_LIMIT_PER_MIN ?? "60", 10);
+  if (Number.isNaN(perMinute) || perMinute <= 0) return true;
+  const now = Date.now();
+  const bucket = rateBuckets.get(clientKey);
+  if (!bucket || now - bucket.windowStart >= RATE_WINDOW_MS) {
+    rateBuckets.set(clientKey, { count: 1, windowStart: now });
+    return true;
+  }
+  bucket.count += 1;
+  return bucket.count <= perMinute;
 }
 
 await startHttpBridge();
