@@ -996,7 +996,13 @@ server.registerTool(
   {
     title: "Ensoul asset",
     description:
-      "The closed loop, one call: perceive → generate → verify → repair → preview. Give it ANY asset — raw or indexed SVG, raster PNG (perceived into paint-region parts first), or glTF mesh (skeleton proposal) — plus an optional motion prompt and temperament. Returns a stage-by-stage receipt with staged SceneDoc, rig proposals, and a GIF preview when a raster source exists. Nothing commits without review.",
+      "The closed loop, one call: perceive → generate → verify → repair → preview. Give it ANY asset — raw or indexed SVG, raster PNG (perceived into paint-region parts first), or glTF mesh (skeleton proposal) — plus an optional motion prompt and temperament. Returns a stage-by-stage receipt with staged SceneDoc, rig proposals, and a GIF preview when a raster source exists. Nothing commits without review. Safe to retry: identical repeat calls replay the recorded result without re-executing.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    },
     inputSchema: {
       rootPath: z.string().optional(),
       svg: z.string().optional(),

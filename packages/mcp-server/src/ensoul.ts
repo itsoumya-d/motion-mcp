@@ -9,6 +9,7 @@ import { flattenSvgNodes, parseSvgTree } from "@motion-mcp/svg-parser";
 import { analyzeSceneMotion, lintCurves, loadRubric, runRepairLoop } from "@motion-mcp/critic";
 import { nowIso } from "@motion-mcp/shared-types";
 import { loadOptionalJson } from "./internals.js";
+import { ensoulRequestKey, loadPriorResult, recordResult } from "./idempotency.js";
 
 export interface EnsoulInput {
   svg?: string;
@@ -43,6 +44,8 @@ export interface EnsoulResult {
   previewGifBase64?: string;
   notes: string[];
   nextTool: "review_animation" | "auto_repair" | "rig_asset";
+  /** True when this result was replayed from the idempotency ledger, not re-executed. */
+  replayed?: boolean;
 }
 
 const DEFAULT_PROMPT = "calm idle breathing";
@@ -57,6 +60,19 @@ const DEFAULT_PROMPT = "calm idle breathing";
  * artifact stages under .motion-mcp/ — nothing commits without review.
  */
 export async function ensoulAsset(root: string, input: EnsoulInput): Promise<EnsoulResult> {
+  // Idempotent retry guard (SEP-3182 shape): a client retrying after a lost
+  // response replays the recorded result instead of re-running the pipeline.
+  const requestKey = ensoulRequestKey(input as unknown as Record<string, unknown>);
+  const prior = await loadPriorResult<EnsoulResult>(root, requestKey);
+  if (prior) {
+    return {
+      ...prior,
+      previewGifBase64: prior.previewGifBase64,
+      replayed: true,
+      notes: [...prior.notes, `Idempotent replay of request ${requestKey.slice(0, 12)}…; no side effects re-executed.`]
+    };
+  }
+
   const stages: EnsoulStage[] = [];
   const notes: string[] = [];
   let svgSource: string | undefined;
@@ -205,7 +221,7 @@ export async function ensoulAsset(root: string, input: EnsoulInput): Promise<Ens
 
   const overallOk = validation.ok && verifiedOk;
 
-  return {
+  const result: EnsoulResult = {
     ok: overallOk,
     assetKind,
     stages,
@@ -217,6 +233,8 @@ export async function ensoulAsset(root: string, input: EnsoulInput): Promise<Ens
     notes,
     nextTool: overallOk ? "review_animation" : svgSource ? "auto_repair" : "rig_asset"
   };
+  await recordResult(root, requestKey, result);
+  return result;
 }
 
 function injectedDocIsClean(doc: SceneDoc): boolean {
