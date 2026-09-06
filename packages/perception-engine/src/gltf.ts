@@ -84,8 +84,8 @@ export interface GlbContainer {
 }
 
 export function parseGlbContainer(bytes: Uint8Array): GlbContainer {
-  if (!isGlb(bytes)) {
-    throw new Error("Invalid GLB container: missing magic header.");
+  if (!isGlb(bytes) || bytes.length < 12) {
+    throw new Error("Invalid .glb container: missing magic header or buffer too short.");
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const version = view.getUint32(4, true);
@@ -98,7 +98,7 @@ export function parseGlbContainer(bytes: Uint8Array): GlbContainer {
   let doc: GltfDocument | null = null;
   let binaryBuffer: Uint8Array | undefined;
 
-  while (offset < totalLength && offset < bytes.byteLength) {
+  while (offset + 8 <= totalLength && offset + 8 <= bytes.byteLength) {
     const chunkLength = view.getUint32(offset, true);
     const chunkType = view.getUint32(offset + 4, true);
     const chunkData = bytes.subarray(offset + 8, offset + 8 + chunkLength);
@@ -123,7 +123,9 @@ export function parseGlbContainer(bytes: Uint8Array): GlbContainer {
 export function parseGltf(source: string | Uint8Array): GltfDocument {
   if (typeof source !== "string") {
     if (isGlb(source)) {
-      return parseGlbContainer(source).doc;
+      throw new Error(
+        "Binary .glb containers are not supported by parseGltf — use parseGlbContainer or export the asset as JSON .gltf (with embedded base64 buffers or a sibling .bin)."
+      );
     }
     source = new TextDecoder().decode(source);
   }
