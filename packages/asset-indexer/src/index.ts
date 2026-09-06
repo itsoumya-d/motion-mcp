@@ -38,7 +38,12 @@ const ASSET_EXTENSIONS = new Set([
   ".jpg",
   ".jpeg",
   ".webp",
-  ".gif"
+  ".gif",
+  ".glb",
+  ".gltf",
+  ".fbx",
+  ".obj",
+  ".bvh"
 ]);
 
 export async function scanAssets(rootPath: string): Promise<AssetIndexResult> {
@@ -134,6 +139,11 @@ function detectAssetType(ext: string): AssetType {
   if (ext === ".riv") return "rive";
   if (ext === ".lottie" || ext === ".json") return "lottie";
   if ([".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(ext)) return "image";
+  if (ext === ".glb") return "glb";
+  if (ext === ".gltf") return "gltf";
+  if (ext === ".fbx") return "fbx";
+  if (ext === ".obj") return "obj";
+  if (ext === ".bvh") return "bvh";
   return "unknown";
 }
 

@@ -53,7 +53,12 @@ const ANIMATION_DEPS: Record<string, AnimationRuntime> = {
   lottie: "lottie",
   "simple_animations": "flutter-animation",
   "flutter_animate": "flutter-animation",
-  DOTween: "dotween"
+  DOTween: "dotween",
+  three: "threejs-animation",
+  "@types/three": "threejs-animation",
+  "@react-three/fiber": "r3f-drei",
+  "@react-three/drei": "r3f-drei",
+  "three-stdlib": "threejs-animation"
 };
 
 export async function scanCodebase(rootPath: string): Promise<CodebaseScanResult> {
@@ -98,7 +103,8 @@ export async function scanCodebase(rootPath: string): Promise<CodebaseScanResult
         file.usesImage ||
         file.usesIconLibrary ||
         file.usesLottie ||
-        file.usesRive
+        file.usesRive ||
+        file.uses3d
       );
     }),
     entryPoints,
@@ -206,6 +212,12 @@ function detectFrameworks(
   if (has("react")) {
     frameworks.add("react");
   }
+  if (has("@react-three/fiber")) {
+    frameworks.add("r3f");
+  }
+  if (has("three")) {
+    frameworks.add("threejs");
+  }
   if (files.some((file) => rel(root, file) === "pubspec.yaml" || rel(root, file).endsWith(".dart"))) {
     frameworks.add("flutter");
   }
@@ -215,6 +227,9 @@ function detectFrameworks(
   ) {
     frameworks.add("unity");
   }
+  if (files.some((file) => rel(root, file).endsWith(".uproject") || rel(root, file).startsWith("Source/"))) {
+    frameworks.add("unreal");
+  }
   if (frameworks.size === 0) {
     frameworks.add("unknown");
   }
@@ -222,7 +237,7 @@ function detectFrameworks(
 }
 
 function choosePrimaryFramework(frameworks: FrameworkKind[]): FrameworkKind {
-  for (const candidate of ["expo", "react-native", "next", "react", "flutter", "unity"] as const) {
+  for (const candidate of ["r3f", "threejs", "unreal", "expo", "react-native", "next", "react", "flutter", "unity"] as const) {
     if (frameworks.includes(candidate)) {
       return candidate;
     }
@@ -274,6 +289,7 @@ async function analyzeComponentFile(
     usesLottie: /lottie|dotLottie|\.json["']/.test(source),
     usesRive: /rive|\.riv["']/.test(source),
     usesIconLibrary: /lucide-react|react-icons|@expo\/vector-icons|phosphor|heroicons/.test(source),
+    uses3d: /@react-three\/fiber|@react-three\/drei|THREE\.|\.glb["']|\.gltf["']|\.fbx["']|useGLTF|Canvas/.test(source),
     detectedElements,
     imports
   };

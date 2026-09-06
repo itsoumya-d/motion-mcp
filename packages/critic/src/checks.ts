@@ -64,6 +64,7 @@ const FIX_TEMPLATES: Record<string, (check: CritiqueCheck) => string> = {
   "render-blank": () => "Frames render blank — verify sourceSvg is attached to the artboard and fills are not fully transparent.",
   "easing-mechanical": (check) => `Replace linear easing with easeOut/easeInOut on ${check.evidence ?? "the track"} so motion accelerates and settles naturally.`,
   "velocity-discontinuity": (check) => `Smooth the velocity jump before the flagged key on ${check.evidence ?? "the track"} by adding an intermediate key or fixing units.`,
+  "quaternion-unnormalized": (check) => `Normalize quaternion rotation vectors on ${check.evidence ?? "the track"} to unit length (|q| = 1.0) to prevent mesh distortion.`,
   "judge-aliveness": (check) => check.message
 };
 
@@ -275,6 +276,28 @@ function critiqueTrack(track: SceneTrack, clip: SceneClip, evidence: string, rub
           message: `Alternating sub-2px movement on ${evidence} reads as jitter.`,
           evidence
         }));
+      }
+    }
+  }
+
+  // 3D Quaternion integrity
+  if (track.property === "quaternion") {
+    for (let i = 0; i < track.keys.length; i++) {
+      const val = track.keys[i]?.value;
+      if (Array.isArray(val) && val.length === 4) {
+        const lenSq = (val[0] ?? 0) ** 2 + (val[1] ?? 0) ** 2 + (val[2] ?? 0) ** 2 + (val[3] ?? 1) ** 2;
+        if (Math.abs(lenSq - 1.0) > 0.08) {
+          push(
+            checks,
+            emit(rubric, {
+              id: "quaternion-unnormalized",
+              severity: "warn",
+              message: `Unnormalized quaternion (|q|²=${lenSq.toFixed(3)}) on ${evidence} at key ${i}.`,
+              evidence
+            })
+          );
+          break;
+        }
       }
     }
   }

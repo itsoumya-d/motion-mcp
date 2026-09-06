@@ -78,12 +78,52 @@ export function isGlb(bytes: Uint8Array): boolean {
   );
 }
 
+export interface GlbContainer {
+  doc: GltfDocument;
+  binaryBuffer?: Uint8Array;
+}
+
+export function parseGlbContainer(bytes: Uint8Array): GlbContainer {
+  if (!isGlb(bytes)) {
+    throw new Error("Invalid GLB container: missing magic header.");
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const version = view.getUint32(4, true);
+  if (version !== 2) {
+    throw new Error(`Only GLB version 2 is supported (got version ${version}).`);
+  }
+  const totalLength = view.getUint32(8, true);
+  let offset = 12;
+
+  let doc: GltfDocument | null = null;
+  let binaryBuffer: Uint8Array | undefined;
+
+  while (offset < totalLength && offset < bytes.byteLength) {
+    const chunkLength = view.getUint32(offset, true);
+    const chunkType = view.getUint32(offset + 4, true);
+    const chunkData = bytes.subarray(offset + 8, offset + 8 + chunkLength);
+
+    if (chunkType === 0x4e4f534a) {
+      const jsonText = new TextDecoder().decode(chunkData);
+      doc = JSON.parse(jsonText) as GltfDocument;
+    } else if (chunkType === 0x004e4942) {
+      binaryBuffer = chunkData;
+    }
+
+    offset += 8 + chunkLength;
+  }
+
+  if (!doc) {
+    throw new Error("GLB container does not contain a valid JSON chunk.");
+  }
+
+  return { doc, binaryBuffer };
+}
+
 export function parseGltf(source: string | Uint8Array): GltfDocument {
   if (typeof source !== "string") {
     if (isGlb(source)) {
-      throw new Error(
-        "Binary .glb containers are not supported yet — export the asset as JSON .gltf (with embedded base64 buffers or a sibling .bin)."
-      );
+      return parseGlbContainer(source).doc;
     }
     source = new TextDecoder().decode(source);
   }
@@ -95,13 +135,23 @@ export function parseGltf(source: string | Uint8Array): GltfDocument {
   return doc;
 }
 
-async function loadBuffers(doc: GltfDocument, loadExternal: LoadExternalBuffer): Promise<Uint8Array[]> {
+async function loadBuffers(
+  doc: GltfDocument,
+  loadExternal: LoadExternalBuffer,
+  glbBin?: Uint8Array
+): Promise<Uint8Array[]> {
   const out: Uint8Array[] = [];
-  for (const buffer of doc.buffers ?? []) {
-    if (buffer.uri?.startsWith("data:application/octet-stream;base64,")) {
+  const buffers = doc.buffers ?? [];
+  for (let i = 0; i < buffers.length; i++) {
+    const buffer = buffers[i]!;
+    if (i === 0 && glbBin) {
+      out.push(glbBin);
+    } else if (buffer.uri?.startsWith("data:application/octet-stream;base64,")) {
       out.push(Uint8Array.from(Buffer.from(buffer.uri.slice("data:application/octet-stream;base64,".length), "base64")));
     } else if (buffer.uri) {
       out.push(await loadExternal(buffer.uri));
+    } else if (glbBin) {
+      out.push(glbBin);
     } else {
       throw new Error("glTF buffer has no uri and no loader was provided.");
     }
@@ -200,10 +250,26 @@ export async function proposeRigFromGltf(
   source: string | Uint8Array,
   options: ProposeRigFromGltfOptions = {}
 ): Promise<RigProposalFromGltf> {
-  const doc = parseGltf(source);
-  const buffers = await loadBuffers(doc, options.loadBuffer ?? (() => {
-    throw new Error("glTF references an external .bin buffer; provide loadBuffer(uri) to fetch it.");
-  }));
+  let doc: GltfDocument;
+  let glbBin: Uint8Array | undefined;
+
+  if (typeof source !== "string" && isGlb(source)) {
+    const parsed = parseGlbContainer(source);
+    doc = parsed.doc;
+    glbBin = parsed.binaryBuffer;
+  } else {
+    doc = parseGltf(source);
+  }
+
+  const buffers = await loadBuffers(
+    doc,
+    options.loadBuffer ??
+      ((uri) => {
+        if (glbBin && (!uri || uri === "")) return Promise.resolve(glbBin);
+        throw new Error("glTF references an external .bin buffer; provide loadBuffer(uri) to fetch it.");
+      }),
+    glbBin
+  );
 
   if (doc.skins && doc.skins.length > 0) {
     return skinnedProposal(doc, buffers);

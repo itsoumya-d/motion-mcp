@@ -8,18 +8,34 @@
 [![CI](https://github.com/itsoumya-d/motion-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/itsoumya-d/motion-mcp/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg)](https://www.typescriptlang.org/)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-native-8A2BE2.svg)](https://modelcontextprotocol.io)
-[![Targets](https://img.shields.io/badge/targets-React_·_RN_·_Flutter_·_Unity-ff69b4.svg)](#what-it-builds)
+[![Targets](https://img.shields.io/badge/targets-React_·_RN_·_Flutter_·_Unity_·_Three.js-ff69b4.svg)](#what-it-builds)
 
 </div>
 
-Motion MCP plugs into Codex, Claude Code, Cursor, or any MCP-compatible agent and turns an **existing codebase** into a living, animated product. It scans your app, understands your screens and flows, writes Rive-like state-machine experience specs, compiles them through an open scene format (**SceneDoc**), generates framework-native animation code for React, React Native, Flutter, and Unity, and stages everything as reviewable diffs that apply only after approval.
+Motion MCP plugs into Codex, Claude Code, Cursor, or any MCP-compatible agent and turns an **existing codebase** into a living, animated product. It scans your app, understands your screens and flows, writes Rive-like state-machine experience specs, compiles them through an open scene format (**SceneDoc**), generates framework-native animation code for React, React Native, Flutter, Unity, Three.js, and React Three Fiber (R3F), and stages everything as reviewable diffs that apply only after approval. Supports both 2D UI/character vector motion and text-to-3D skeletal animation powered by diffusion.
 
 > **No rewrites. No invented runtime. No generated app replacing the real one.**
 > The motion lands inside *your* components, bound to *your* app state, rendered by *your* stack.
 
 ---
 
-## What's new — the verification-first milestone (Aug 2026)
+## What's new — Unified 2D + 3D AI Motion & Kimodo.cpp Integration (Sep 2026)
+
+Motion MCP expanded from 2D vector animations into full **text-to-3D skeletal animation diffusion**, integrating the capabilities of `kimodo.cpp`. 52 → **64 MCP tools**, 213 → **230+ tests**, 29 → **32 packages**:
+
+| Capability | What landed |
+|---|---|
+| **Text-to-3D Skeletal Diffusion (`generate_3d_motion`)** | Natural language prompt to 3D skeletal motion across 22 SMPL-X standard joints. Outputs quaternion tracks and root translations as SceneDoc 3D artboards |
+| **Pluggable 3D Backends (`@motion-mcp/kimodo-bridge`)** | Abstracted `Motion3DBackend` and `BackendRegistry`. Supports local `kimodo.cpp` (GGML / Vulkan / CPU) and zero-dependency deterministic procedural `MockBackend` (walking, waving, jumping, breathing) |
+| **Rig Retargeting Engine (`@motion-mcp/retargeter`)** | Retargets SMPL-X 22-joint motion onto Mixamo, Unity Mecanim Humanoid, Unreal Engine Mannequin, or custom rigs with scale compensation, root motion extraction, and smoothing passes |
+| **BVH Mocap Codec (`import_bvh`, `export_3d_animation`)** | Full parser for industry-standard BVH motion capture files and serializer to export `MotionSequence3D` to BVH text for Blender / Maya |
+| **React Three Fiber & Three.js Emitters (`@motion-mcp/emitter-threejs`)** | Emits native R3F components with `@react-three/drei` (`useGLTF`, `useAnimations`) and vanilla Three.js animation modules with `GLTFLoader` and `THREE.AnimationMixer` |
+| **Unity 3D Skeletal Code & `.anim` YAML (`@motion-mcp/emitter-unity`)** | Generates Mecanim-ready `MonoBehaviour` controllers and native Unity `AnimationClip` asset files (`.anim` YAML) with serialized quaternion rotation curves per bone |
+| **Binary `.glb` Container Support (`@motion-mcp/perception-engine`)** | `parseGlbContainer` extracts JSON chunks and binary buffer chunks directly from binary `.glb` files, eliminating previous JSON-only glTF constraints |
+| **3D Codebase & Asset Perception** | `codebase-scanner` detects Three.js, React Three Fiber, and Unreal projects; `asset-indexer` catalogs `.glb`, `.gltf`, `.fbx`, `.obj`, and `.bvh` files |
+| **3D Motion Quality Critic** | `critic` validates 3D quaternion unit normalization (`\|q\| = 1.0`) across all rotation keyframes to guard against mesh distortion |
+
+## Previous milestone — the verification-first milestone (Aug 2026)
 
 Motion MCP closed the loop that separates it from every generate-and-hope tool in this space. 38 → **52 MCP tools**, 154 → **213 tests**, 27 → **29 packages**:
 
@@ -36,9 +52,9 @@ Motion MCP closed the loop that separates it from every generate-and-hope tool i
 | **Video-to-rig (`vectorize_video`)** | Cross-frame part tracking over flipbook keyframes (deterministic IoU + centroid matching) infers a SceneDoc bone hierarchy from any moving video — returned as a reviewable `rigProposal`; degenerate tracking stays pure flipbook and reports why |
 | **Video-motion smoothing (`motion_to_curves`)** | Tracked part trajectories become eased translateX/Y SceneDoc tracks over persistent per-part layers, plus a standalone animated SVG preview — smooth motion at low keyframe counts instead of flipbook cuts, staged as a reviewable diff with deterministic ids |
 
-Schema evolved without breaking anyone: `temperament`, binding converters (Rive-view-model-style), and per-bone weights are additive SceneDoc v1 extensions under a documented versioning contract ([`docs/scenedoc-v1-extensions.md`](./docs/scenedoc-v1-extensions.md)).
+Schema evolved without breaking anyone: `temperament`, binding converters (Rive-view-model-style), per-bone weights, and 3D properties (`origin3d`, `restRotation`, `is3d`, `camera`) are additive SceneDoc v1 extensions under a documented versioning contract ([`docs/scenedoc-v1-extensions.md`](./docs/scenedoc-v1-extensions.md)).
 
-**Docs**: [Getting started](./docs/getting-started.md) · [Tool reference (52 tools)](./docs/tool-reference.md) · [SceneDoc spec](./docs/scenedoc-spec.md) · [HF Spaces deploy](./docs/DEPLOY-HF-SPACE.md)
+**Docs**: [Getting started](./docs/getting-started.md) · [Tool reference (64 tools)](./docs/tool-reference.md) · [SceneDoc spec](./docs/scenedoc-spec.md) · [HF Spaces deploy](./docs/DEPLOY-HF-SPACE.md)
 
 ---
 
@@ -91,7 +107,7 @@ Honest scope notes for evaluators: video tracing produces layered-flipbook Scene
 ```mermaid
 flowchart LR
     subgraph AGENT["🤖 Coding Agent (Codex / Claude / Cursor)"]
-        T["MCP Tools<br/>52 tools"]
+        T["MCP Tools<br/>64 tools"]
     end
 
     subgraph RESEARCH["🔍 Understand"]
@@ -100,16 +116,15 @@ flowchart LR
         R2 --> R3["research_state_machine_experience<br/>layers · states · transitions<br/>listeners · ViewModel bindings"]
     end
 
-    subgraph ASSETS["🎨 Asset Lanes"]
-        A1["Simple lane<br/>host-model SVG briefs"]
-        A2["Premium lane<br/>QuiverAI structured SVG"]
-        A3["svg-parser<br/>DOM parse · CSS cascade<br/>transforms · use/defs · gradients"]
-        A1 --> A3
+    subgraph ASSETS["🎨 Assets & 3D Diffusion"]
+        A1["2D Vector Lanes<br/>Simple / Premium QuiverAI"]
+        A2["3D Motion Diffusion<br/>kimodo-bridge (SMPL-X22)"]
+        A3["Retargeter<br/>Mixamo · Unity · Unreal · BVH"]
         A2 --> A3
     end
 
     subgraph SCENE["📐 Scene Graph"]
-        SG["compileExperienceToScene<br/>deterministic motion grammar<br/>per-state keyframe clips"]
+        SG["SceneDoc v1 (2D + 3D)<br/>deterministic motion grammar<br/>quaternion + euler tracks"]
         V["validateSceneDoc<br/>reference sampler"]
         SG --> V
     end
@@ -117,31 +132,33 @@ flowchart LR
     subgraph EMIT["⚙️ Emit & Integrate"]
         E1["React / Next<br/>Framer Motion · GSAP"]
         E2["React Native / Expo<br/>Reanimated 3 · react-svg"]
-        E3["Flutter β<br/>AnimationController"]
-        E4["Unity β<br/>UI pointer behavior"]
+        E3["Three.js / R3F<br/>useGLTF · useAnimations"]
+        E4["Unity<br/>Mecanim 3D .anim YAML · UI"]
+        E5["Flutter β<br/>AnimationController"]
         P["ast-patcher<br/>TS AST import patching"]
-        EX["exporters<br/>Lottie · animated SVG"]
+        EX["exporters<br/>BVH · Lottie · animated SVG"]
     end
 
     subgraph SHIP["✅ Ship"]
         D["Staged diffs<br/>.motion-mcp/diffs"]
-        PV["preview_animation"]
+        PV["preview_animation<br/>preview_3d_motion"]
         AP["apply_motion_diff<br/>+ project validation"]
     end
 
     T --> S
     R3 -->|"state-machine-experience.json"| SG
-    A3 -->|"rig reports · pathTree"| E1
-    SG --> E1 & E2 & E3 & E4
+    A1 --> SG
+    A3 -->|"3D clips · rigs"| SG
+    SG --> E1 & E2 & E3 & E4 & E5
     P --> D
-    E1 & E2 & E3 & E4 --> D
+    E1 & E2 & E3 & E4 & E5 --> D
     SG -.-> EX
     D --> PV --> AP
 ```
 
-### One spec in, four frameworks out — provably identical
+### One spec in, native frameworks out — 2D vector to 3D skeletal
 
-`generate_animation` no longer stamps a fixed template. It loads `state-machine-experience.json`, compiles it into a **SceneDoc artboard**, and every emitter renders *that* — real states, real transitions, real keyframes. A conformance harness pins this contract byte-for-byte across all four targets.
+`generate_animation` and `generate_3d_motion` compile intent into **SceneDoc artboards** (both 2D and 3D), and emitters render native framework code — React Framer Motion, React Native Reanimated, Flutter, Three.js / React Three Fiber, and Unity Mecanim `.anim` curves.
 
 ---
 
@@ -205,7 +222,7 @@ Per-part staggering is baked into keyframe times, so multi-part assets choreogra
 ```mermaid
 graph TD
     subgraph SERVER["MCP Server (@motion-mcp/server)"]
-        MCP["52 MCP tools · stdio + HTTP bridge"]
+        MCP["64 MCP tools · stdio + HTTP bridge"]
     end
 
     subgraph UNDERSTAND["Understanding"]
@@ -218,16 +235,19 @@ graph TD
 
     subgraph CORE["Core Engines"]
         SP["svg-parser<br/>@xmldom/xmldom"]
-        SGR["scene-graph<br/>SceneDoc v1"]
+        SGR["scene-graph<br/>SceneDoc v1 (2D + 3D)"]
         AE["anatomy-engine<br/>species rigs"]
+        KB["kimodo-bridge<br/>Kimodo.cpp + Mock"]
+        RT["retargeter<br/>SMPL-X · Mixamo · BVH"]
         MR["motion-runtime<br/>zero-dep clip player"]
     end
 
     subgraph EMITTERS["Emitters"]
         ER["emitter-react"]
         ERN["emitter-react-native"]
+        ETH["emitter-threejs<br/>R3F · Three.js"]
         EF["emitter-flutter β"]
-        EU["emitter-unity β"]
+        EU["emitter-unity β<br/>3D .anim YAML + UI"]
     end
 
     subgraph SUPPORT["Support"]
@@ -243,6 +263,7 @@ graph TD
     AU --> SMR
     MP --> SGR
     SP -->|"pathTree · rig reports"| AE & SGR
+    KB --> RT --> SGR
     SGR --> EMITTERS
     MR -->|"MotionDoc ⇄ SceneClip"| SGR
     AP2 -->|"patchIntoSource"| SERVER
@@ -251,21 +272,25 @@ graph TD
 
 | Package | Role |
 |---|---|
-| `server` | MCP stdio server + HTTP bridge exposing all tools |
-| `codebase-scanner` | Framework detection, deps, entry points, component inventory |
+| `server` | MCP stdio server + HTTP bridge exposing all 64 tools |
+| `codebase-scanner` | Framework detection (incl. Three.js / R3F / Unreal), deps, entry points, component inventory |
 | `app-researcher` | Screens, flows, ranked screen motion plans, asset-lane decisions |
 | `auto-researcher` | Source-backed research engine: findings → scored opportunities → context packs |
 | `state-machine-researcher` | Rive-like per-page experience specs (layers, states, transitions, listeners, bindings) |
 | `svg-parser` | Real DOM parsing: style cascade, composed transforms, `<use>`/`<defs>` expansion, gradient registry |
-| `scene-graph` | **SceneDoc v1**: compiler, motion grammar, validator, reference sampler |
+| `scene-graph` | **SceneDoc v1**: compiler, motion grammar, 2D+3D properties, validator, reference sampler |
+| `kimodo-bridge` | **3D Motion Diffusion**: Pluggable backend for local `kimodo.cpp` (GGML / Vulkan) + deterministic `MockBackend` |
+| `retargeter` | **Skeletal Retargeting**: SMPL-X 22-joint transfer to Mixamo / Unity / Unreal, BVH parser & exporter, smoothing & loop blending |
+| `emitter-threejs` | **3D Web Code Generation**: React Three Fiber components (`@react-three/drei`) + vanilla Three.js animation modules |
 | `generation-engine` | **Procedural synthesis**: NL intent lexicon + temperament-driven recipes (overshoot, squash-and-stretch, stagger) into self-checked SceneDocs |
-| `perception-engine` | **Perception**: PNG → paint-region part segmentation → rig proposals; glTF 2.0 skins/meshes → skeleton proposals with weight stats |
+| `perception-engine` | **Perception**: PNG → paint-region part segmentation; glTF 2.0 skins/meshes + binary `.glb` container decoding → skeleton proposals with weight stats |
 | `anatomy-engine` | Species-aware SVG anatomy (`human-biped`, `avian-crow`) → semantic actions |
 | `motion-runtime` | Zero-dependency skeletal FK player: keyframed clips, crossfade layers, hysteresis rep counting |
 | `emitter-react` / `-react-native` | Framer Motion variants + transition tables / Reanimated 3 + `react-native-svg` |
-| `emitter-flutter` / `-unity` (β) | AnimationController wrappers / UI pointer behavior, DOTween-ready |
+| `emitter-unity` (β) | 3D skeletal Mecanim Animator controllers + `.anim` YAML AnimationClips / UI pointer behavior |
+| `emitter-flutter` (β) | AnimationController wrappers |
 | `player` | Zero-dep `ScenePlayer` + `<motion-scene>` web component: transitions, deterministic seek, reduced-motion |
-| `exporters` | Lottie JSON writer (bezier paths incl. arc→cubic) · CSS-keyframe animated SVG |
+| `exporters` | BVH mocap writer · Lottie JSON writer · CSS-keyframe animated SVG |
 | `riv-importer` | Rive binary reader + structural/keyframe/geometry decoder using rive-runtime's core type keys — paths → SVG, KeyFrameDoubles → SceneClips, SM graphs → topology |
 | `figma-bridge` | Figma import bridge: thin plugin collector (frames, elements, prototype reactions) → plain-JSON snapshot → synthesized SceneDoc artboards with per-state pose clips; entry frame renders to layered SVG |
 | `vectorizer` | Video → vector animation, fully local: ffmpeg frame extraction, median-cut palette quantization, contour boundary tracing (with hole loops), temporal frame reduction, cross-frame IoU part tracking → playable flipbook SceneDoc with inferred rigs |
@@ -284,20 +309,38 @@ graph TD
 |---|---|---|---|
 | React / Next.js | Framer Motion, GSAP-ready | ✅ stable | Animated SVG components + enhancer wrappers, scene-driven variant tables |
 | Expo / React Native | Reanimated 3 + react-native-svg | ✅ stable | Pressable shells, shared-value tweens, accessibility-aware |
+| Three.js / React Three Fiber | `@react-three/drei`, Three.js mixer | ✅ stable | R3F character components with `useGLTF`/`useAnimations` + vanilla Three.js modules |
+| Unity | Mecanim Humanoid Animator, DOTween-ready | ✅ stable | 3D `.anim` YAML AnimationClips + MonoBehaviour controllers, UI pointer interaction scripts |
 | Flutter | AnimationController, CustomPainter hooks | 🧪 beta | Enum-driven host-code state machines |
-| Unity | UI EventSystem, DOTween-ready | 🧪 beta | Pointer interaction behavior scripts |
 
 Every generated component ships with: reduced-motion handling, semantic labels, controlled/uncontrolled state support, and a host-side state machine you own — nothing phones home at runtime.
 
-## MCP tools (52)
+## MCP tools (64)
 
 **Understand the codebase**
 
 | Tool | Purpose |
 |---|---|
-| `scan_codebase` | Framework, deps, entry points, components, animation libs |
-| `scan_assets` | Index SVG/Lottie/Rive/images with parsed anatomy trees |
+| `scan_codebase` | Framework (incl. Three.js / R3F / Unreal), deps, entry points, components, animation libs |
+| `scan_assets` | Index SVG/Lottie/Rive/images and 3D models (`.glb`, `.gltf`, `.fbx`, `.obj`, `.bvh`) with parsed anatomy trees |
 | `get_app_motion_context` | Combined context: screens, flows, tokens, motion thesis |
+
+**3D Skeletal Motion & Diffusion (Kimodo.cpp / Pluggable)**
+
+| Tool | Purpose |
+|---|---|
+| `generate_3d_motion` | Natural language text prompt → 3D skeletal animation (SMPL-X 22 joints) via local diffusion or procedural synthesis |
+| `list_3d_backends` | List installed 3D engines (Kimodo.cpp, MockBackend, etc.) and hardware execution capabilities |
+| `list_3d_models` | Catalog available GGUF motion diffusion weights from local model directories |
+| `retarget_motion` | Retarget 3D skeletal motion to Mixamo, Unity Mecanim Humanoid, Unreal Mannequin, or custom rigs |
+| `export_3d_animation` | Export 3D animation to industry formats: BVH mocap text, React Three Fiber, Three.js, or Unity `.anim` |
+| `import_bvh` | Parse and ingest raw BVH motion capture text into an open SceneDoc 3D artboard |
+| `preview_3d_motion` | Preview telemetry: frame counts, bounding-box extents, joint trajectories, timeline status |
+| `blend_3d_motions` | Quaternion SLERP loop boundary blending for seamless cycle repetition |
+| `generate_motion_variants` | Generate N procedural style variations of a motion prompt using varied seeds |
+| `apply_3d_motion_to_asset` | Generate 3D motion and stage reviewable native framework code linking it to a project 3D asset |
+| `motion_style_transfer_3d` | Apply temperament smoothing (calm, snappy, playful, smooth) to 3D joint rotations |
+| `import_fbx_animation` | Inspect FBX animation file structures and stage into SceneDoc candidate pools |
 
 **Research & plan**
 
@@ -320,8 +363,8 @@ Every generated component ships with: reduced-motion handling, semantic labels, 
 | `generate_premium_svg_asset` | QuiverAI structured SVG generation |
 | `generate_svg_asset` / `vectorize_asset` | Direct Quiver calls (image → vector too) |
 | `vectorize_video` | **Video → vector animation** (Anim8's headline, fully local): ffmpeg frames → median-cut palette → contour-traced layered SVG keyframes → temporal reduction → playable flipbook SceneDoc |
-| `perceive_image` | **Raster perception** (`@motion-mcp/perception-engine`): PNG → quantized connected paint regions → named layered SVG parts → anatomy detection + auto-rigger → commit-free rig proposal. Paint-region segmentation, not ML pose segmentation |
-| `perceive_3d` | **glTF 2.0 skeleton proposals**: skinned meshes → exact joint hierarchy + per-joint weight stats from JOINTS_0/WEIGHTS_0; unskinned meshes → inferred band chain along the longest axis. FBX/OBJ/.glb not yet supported |
+| `perceive_image` | **Raster perception** (`@motion-mcp/perception-engine`): PNG → quantized connected paint regions → named layered SVG parts → anatomy detection + auto-rigger → commit-free rig proposal |
+| `perceive_3d` | **glTF 2.0 & binary .glb skeleton proposals**: skinned meshes → exact joint hierarchy + per-joint weight stats from JOINTS_0/WEIGHTS_0; unskinned meshes → inferred band chain along the longest axis |
 | `generate_asset_batch` | Up to 64 items, dry-run costing, per-item isolation |
 | `analyze_svg_anatomy` / `resolve_anatomy_action` | Species detection; blink/wave/flap/caw resolution |
 | `rig_asset` / `list_rig_capabilities` | **Auto-rigger**: bones + eye look-at IK + ambient secondary motion for any SVG (bipeds, birds, quadrupeds, insects, vehicles, universal blob fallback) |

@@ -52,6 +52,14 @@ export interface SceneArtboard {
   rig?: SceneRig;
   /** Optional personality parameters driving procedural motion style (SceneDoc v1 extension). */
   temperament?: SceneTemperament;
+  /** Whether this artboard contains 3D content (SceneDoc v1 3D extension). */
+  is3d?: boolean;
+  /** Artboard content type (SceneDoc v1 3D extension). */
+  sceneType?: "2d" | "3d" | "hybrid";
+  /** Camera configuration for 3D scenes (SceneDoc v1 3D extension). */
+  camera?: SceneCamera;
+  /** Environment settings for 3D scenes (SceneDoc v1 3D extension). */
+  environment?: SceneEnvironment;
 }
 
 /**
@@ -80,6 +88,12 @@ export interface SceneRig {
   bones: SceneBone[];
   ikChains: SceneIkChain[];
   secondaryMotion: SceneSecondaryMotion[];
+  /** Skeleton type identifier (SceneDoc v1 3D extension). */
+  skeletonType?: "smplx" | "mixamo" | "ue-mannequin" | "custom" | "inferred";
+  /** Total joint count in the source skeleton (SceneDoc v1 3D extension). */
+  jointCount?: number;
+  /** Whether the motion includes root translation data (SceneDoc v1 3D extension). */
+  rootMotion?: boolean;
 }
 
 export interface SceneBone {
@@ -88,10 +102,16 @@ export interface SceneBone {
   parentBoneId?: string;
   /** Part ids this bone drives. */
   targetParts: string[];
-  /** Joint origin in artboard coordinates. */
+  /** Joint origin in artboard coordinates (2D). */
   origin: { x: number; y: number };
+  /** Joint origin in 3D world coordinates (SceneDoc v1 3D extension). */
+  origin3d?: { x: number; y: number; z: number };
   length?: number;
+  /** Bone length in 3D world units (SceneDoc v1 3D extension). */
+  length3d?: number;
   restRotationDeg?: number;
+  /** Rest pose rotation as quaternion [x, y, z, w] (SceneDoc v1 3D extension). */
+  restRotation?: [number, number, number, number];
   /** Per-part influence in [0,1] (auto-weight output; SceneDoc v1 extension). */
   weights?: Record<string, number>;
 }
@@ -150,7 +170,14 @@ export type SceneProperty =
   | "stroke"
   | "strokeWidth"
   | "x"
-  | "y";
+  | "y"
+  // 3D extensions (SceneDoc v1 additive — backward compatible)
+  | "translateZ"
+  | "rotateX"
+  | "rotateY"
+  | "rotateZ"
+  | "quaternion"
+  | "scaleZ";
 
 export interface SceneKeyframe {
   t: number;
@@ -206,6 +233,26 @@ export interface SceneSemantics {
   role?: string;
   live?: "off" | "polite" | "assertive";
   reducedMotionSafe?: boolean;
+}
+
+/**
+ * Camera configuration for 3D artboards (SceneDoc v1 3D extension).
+ */
+export interface SceneCamera {
+  position: [number, number, number];
+  target: [number, number, number];
+  fov?: number;
+  near?: number;
+  far?: number;
+}
+
+/**
+ * Environment settings for 3D scenes (SceneDoc v1 3D extension).
+ */
+export interface SceneEnvironment {
+  skyColor?: string;
+  groundColor?: string;
+  ambientIntensity?: number;
 }
 
 export function emptySceneDoc(sceneId: string, name: string): SceneDoc {

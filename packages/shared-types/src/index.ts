@@ -5,6 +5,9 @@ export type FrameworkKind =
   | "expo"
   | "flutter"
   | "unity"
+  | "threejs"
+  | "r3f"
+  | "unreal"
   | "unknown";
 
 export type AnimationRuntime =
@@ -20,9 +23,12 @@ export type AnimationRuntime =
   | "unity-animator"
   | "rive"
   | "lottie"
+  | "threejs-animation"
+  | "r3f-drei"
+  | "ue-anim-blueprint"
   | "none";
 
-export type AssetType = "svg" | "lottie" | "rive" | "image" | "unknown";
+export type AssetType = "svg" | "lottie" | "rive" | "image" | "glb" | "gltf" | "fbx" | "obj" | "bvh" | "unknown";
 
 export type AssetLane = "simple" | "premium";
 
@@ -67,7 +73,18 @@ export type MotionOperation =
   | "generate_svg_asset"
   | "vectorize_asset"
   | "vectorize_video"
-  | "validate";
+  | "validate"
+  // 3D motion operations
+  | "generate_3d_motion"
+  | "retarget_motion"
+  | "preview_3d_motion"
+  | "export_3d_animation"
+  | "import_bvh"
+  | "import_fbx_animation"
+  | "blend_3d_motions"
+  | "generate_motion_variants"
+  | "apply_3d_motion_to_asset"
+  | "motion_style_transfer_3d";
 
 export type MotionState =
   | "idle"
@@ -112,7 +129,7 @@ export type MotionActionType = "setProperty" | "reportEvent" | "focus" | "fireCa
 
 export type MotionListenerType = "pointer" | "press" | "scroll" | "route" | "visibility" | "form" | "game";
 
-export type MotionCodegenTarget = "react" | "react-native" | "flutter" | "unity" | "spec-only";
+export type MotionCodegenTarget = "react" | "react-native" | "flutter" | "unity" | "threejs" | "r3f" | "unreal" | "spec-only";
 
 export interface DependencyMap {
   dependencies: Record<string, string>;
@@ -131,6 +148,7 @@ export interface ComponentFile {
   usesLottie: boolean;
   usesRive: boolean;
   usesIconLibrary: boolean;
+  uses3d?: boolean;
   detectedElements: string[];
   imports: string[];
 }
@@ -778,3 +796,83 @@ export function stableId(prefix: string, value: string): string {
   }, 5381);
   return `${prefix}_${hash.toString(36)}`;
 }
+
+// ---------------------------------------------------------------------------
+// 3D Motion Types (Kimodo.cpp integration)
+// ---------------------------------------------------------------------------
+
+export type SmplxJointName =
+  | "pelvis"
+  | "left_hip"
+  | "right_hip"
+  | "spine1"
+  | "spine2"
+  | "spine3"
+  | "neck"
+  | "head"
+  | "left_shoulder"
+  | "right_shoulder"
+  | "left_elbow"
+  | "right_elbow"
+  | "left_wrist"
+  | "right_wrist"
+  | "left_hand"
+  | "right_hand"
+  | "left_knee"
+  | "right_knee"
+  | "left_ankle"
+  | "right_ankle"
+  | "left_foot"
+  | "right_foot";
+
+export interface SmplxJoint {
+  name: SmplxJointName;
+  index: number;
+  parentIndex: number;
+}
+
+export interface SmplxSkeleton {
+  joints: SmplxJoint[];
+}
+
+export interface JointRotation {
+  jointIndex: number;
+  jointName: string;
+  quaternion: [number, number, number, number];
+}
+
+export interface SmplxFrame {
+  frameIndex: number;
+  rootTranslation: [number, number, number];
+  jointRotations: JointRotation[];
+}
+
+export interface MotionSequence3D {
+  sequenceId: string;
+  prompt: string;
+  fps: number;
+  frameCount: number;
+  durationMs: number;
+  skeleton: SmplxSkeleton;
+  frames: SmplxFrame[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface Generate3DOptions {
+  durationMs: number;
+  steps?: number;
+  fps?: number;
+  seed?: number;
+  temperature?: number;
+}
+
+export interface Motion3DModelInfo {
+  id: string;
+  name: string;
+  backend: string;
+  parameterCount?: number;
+  fileSize: number;
+  license?: string;
+  capabilities: string[];
+}
+

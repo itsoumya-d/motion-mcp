@@ -1,0 +1,38 @@
+{
+  "name": "@motion-mcp/kimodo-bridge",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Bridge to kimodo.cpp and compatible 3D motion diffusion backends. Pluggable architecture supporting kimodo, MDM, MLD, and custom backends for text-to-3D skeletal animation generation.",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@motion-mcp/shared-types": "workspace:*",
+    "@motion-mcp/scene-graph": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itsoumya-d/motion-mcp.git",
+    "directory": "packages/kimodo-bridge"
+  },
+  "homepage": "https://github.com/itsoumya-d/motion-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/itsoumya-d/motion-mcp/issues"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

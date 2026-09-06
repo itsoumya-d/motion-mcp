@@ -110,6 +110,7 @@ import {
   renderPreviewTool,
   verifyCrossRuntimeTool
 } from "./forge.js";
+import { register3DTools } from "./tools-3d.js";
 
 const server = new McpServer({
   name: "motion-mcp",
@@ -1432,7 +1433,17 @@ async function estimateMotionCost(
     generate_svg_asset: 50,
     vectorize_asset: 50,
     vectorize_video: 15,
-    validate: 5
+    validate: 5,
+    generate_3d_motion: 50,
+    retarget_motion: 20,
+    preview_3d_motion: 10,
+    export_3d_animation: 5,
+    import_bvh: 8,
+    import_fbx_animation: 8,
+    blend_3d_motions: 15,
+    generate_motion_variants: 40,
+    apply_3d_motion_to_asset: 12,
+    motion_style_transfer_3d: 10
   };
   const fixed = fixedByOperation[operation] ?? 90;
   return {
@@ -2919,6 +2930,8 @@ function requestAllowed(clientKey: string): boolean {
   bucket.count += 1;
   return bucket.count <= perMinute;
 }
+
+register3DTools(server, resolveRoot);
 
 await startHttpBridge();
 await server.connect(new StdioServerTransport());

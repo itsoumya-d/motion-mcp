@@ -267,6 +267,15 @@ importers:
         specifier: workspace:*
         version: link:../shared-types
 
+  packages/emitter-threejs:
+    dependencies:
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
+      '@motion-mcp/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+
   packages/emitter-unity:
     dependencies:
       '@motion-mcp/scene-graph':
@@ -302,6 +311,15 @@ importers:
       '@motion-mcp/scene-graph':
         specifier: workspace:*
         version: link:../scene-graph
+
+  packages/kimodo-bridge:
+    dependencies:
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
+      '@motion-mcp/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
 
   packages/mcp-server:
     dependencies:
@@ -344,6 +362,9 @@ importers:
       '@motion-mcp/emitter-react-native':
         specifier: workspace:*
         version: link:../emitter-react-native
+      '@motion-mcp/emitter-threejs':
+        specifier: workspace:*
+        version: link:../emitter-threejs
       '@motion-mcp/emitter-unity':
         specifier: workspace:*
         version: link:../emitter-unity
@@ -356,6 +377,9 @@ importers:
       '@motion-mcp/generation-engine':
         specifier: workspace:*
         version: link:../generation-engine
+      '@motion-mcp/kimodo-bridge':
+        specifier: workspace:*
+        version: link:../kimodo-bridge
       '@motion-mcp/motion-planner':
         specifier: workspace:*
         version: link:../motion-planner
@@ -368,6 +392,9 @@ importers:
       '@motion-mcp/quiver-provider':
         specifier: workspace:*
         version: link:../quiver-provider
+      '@motion-mcp/retargeter':
+        specifier: workspace:*
+        version: link:../retargeter
       '@motion-mcp/riv-importer':
         specifier: workspace:*
         version: link:../riv-importer
@@ -436,6 +463,18 @@ importers:
 
   packages/quiver-provider:
     dependencies:
+      '@motion-mcp/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+
+  packages/retargeter:
+    dependencies:
+      '@motion-mcp/kimodo-bridge':
+        specifier: workspace:*
+        version: link:../kimodo-bridge
+      '@motion-mcp/scene-graph':
+        specifier: workspace:*
+        version: link:../scene-graph
       '@motion-mcp/shared-types':
         specifier: workspace:*
         version: link:../shared-types

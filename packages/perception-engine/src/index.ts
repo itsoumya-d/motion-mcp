@@ -10,10 +10,12 @@ export type {
 } from "./image-perception.js";
 export {
   isGlb,
+  parseGlbContainer,
   parseGltf,
   proposeRigFromGltf
 } from "./gltf.js";
 export type {
+  GlbContainer,
   LoadExternalBuffer,
   ProposeRigFromGltfOptions,
   RigProposalFromGltf
