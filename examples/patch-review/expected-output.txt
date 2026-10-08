@@ -1,0 +1,51 @@
+Motion MCP: local patch-review demo
+Hand-written fixture; real existing patcher; no AI or external API calls.
+All changes stay in memory. No user project files are read or modified.
+
+=== BEFORE ===
+"use client";
+
+import * as React from "react";
+import { Button as PrimaryButton } from "@/ui";
+
+// Keep the existing purchase action and imports intact.
+export default function Checkout() {
+  return (
+    <main>
+      <PrimaryButton>Buy</PrimaryButton>
+    </main>
+  );
+}
+
+=== AFTER IMPORT + ANCHOR INSERTION ===
+"use client";
+
+import * as React from "react";
+import { Button as PrimaryButton } from "@/ui";
+import { MotionCtaMark } from "./MotionCtaMark";
+
+// Keep the existing purchase action and imports intact.
+export default function Checkout() {
+  return (
+    <main>
+      <PrimaryButton>Buy</PrimaryButton>
+      <MotionCtaMark aria-hidden="true" />
+    </main>
+  );
+}
+
+=== REVIEW RECEIPT ===
+CHANGED: Add a missing named import
+  added import of MotionCtaMark from "./MotionCtaMark"
+CHANGED: Insert after an explicit text anchor
+  rendered <MotionCtaMark /> after anchor "<PrimaryButton>Buy</PrimaryButton>"
+NO-OP: Repeat both operations: byte-identical no-op
+  imports already satisfied
+  MotionCtaMark is already rendered
+NO-OP: Missing anchor: leave the original source unchanged
+  anchor not found: <MissingAnchor />
+NO-OP: Existing component text: conservative no-op (even inside a comment)
+  MotionCtaMark is already rendered
+
+Scope: TypeScript syntax-tree import inspection + text-anchor JSX insertion.
+No semantic analysis, vulnerability detection, JSX AST rewrite, or compilation guarantee.

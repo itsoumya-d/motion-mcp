@@ -1,0 +1,13 @@
+"use client";
+
+import * as React from "react";
+import { Button as PrimaryButton } from "@/ui";
+
+// Keep the existing purchase action and imports intact.
+export default function Checkout() {
+  return (
+    <main>
+      <PrimaryButton>Buy</PrimaryButton>
+    </main>
+  );
+}
