@@ -32,5 +32,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Patch-review demo typecheck
+        run: pnpm typecheck:patch-review
+
+      - name: Patch-review demo
+        run: pnpm demo:patch-review
+
       - name: Test
         run: pnpm test

@@ -58,6 +58,17 @@ Schema evolved without breaking anyone: `temperament`, binding converters (Rive-
 
 ---
 
+## Runnable source-patching demo
+
+Try a small, credential-free [patch-review demo](./examples/patch-review/README.md):
+`pnpm demo:patch-review` prints a hand-written TSX fixture before and after the
+existing import/anchor patcher, plus deterministic no-op receipts. It runs locally,
+does not modify a user project, and includes focused regression tests and explicit
+limits. This demonstrates TypeScript import inspection and text-anchor insertion,
+not semantic code review or a full JSX AST rewrite.
+
+---
+
 ## Why not just use Rive?
 
 | | Rive | Motion MCP |
