@@ -16,10 +16,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@motion-mcp/app-researcher": "workspace:*",
-    "@motion-mcp/codebase-scanner": "workspace:*",
-    "@motion-mcp/shared-types": "workspace:*",
-    "@motion-mcp/state-machine-researcher": "workspace:*"
+    "@motion-mcp/app-researcher": "*",
+    "@motion-mcp/codebase-scanner": "*",
+    "@motion-mcp/shared-types": "*",
+    "@motion-mcp/state-machine-researcher": "*"
   },
   "repository": {
     "type": "git",

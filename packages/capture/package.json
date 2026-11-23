@@ -15,8 +15,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@motion-mcp/player": "workspace:*",
-    "@motion-mcp/scene-graph": "workspace:*"
+    "@motion-mcp/player": "*",
+    "@motion-mcp/scene-graph": "*"
   },
   "optionalDependencies": {
     "@resvg/resvg-js": "^2.6.2"

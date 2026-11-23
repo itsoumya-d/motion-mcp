@@ -16,9 +16,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@motion-mcp/app-researcher": "workspace:*",
-    "@motion-mcp/codebase-scanner": "workspace:*",
-    "@motion-mcp/shared-types": "workspace:*"
+    "@motion-mcp/app-researcher": "*",
+    "@motion-mcp/codebase-scanner": "*",
+    "@motion-mcp/shared-types": "*"
   },
   "repository": {
     "type": "git",
