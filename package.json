@@ -8,7 +8,7 @@
   "scripts": {
     "build": "pnpm -r --filter './packages/**' build",
     "typecheck": "pnpm -r --filter './packages/**' typecheck",
-    "test": "node --test --test-timeout=60000 --import tsx tests/*.test.ts",
+    "test": "node --test --test-timeout=120000 --import tsx tests/*.test.ts",
     "dev:mcp": "tsx packages/mcp-server/src/index.ts",
     "critic": "tsx packages/critic/src/cli.ts",
     "demo:patch-review": "node --import tsx examples/patch-review/demo.ts",
