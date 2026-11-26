@@ -12,8 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@motion-mcp/anatomy-engine": "*",
-    "@motion-mcp/motion-runtime": "*",
+    "@motion-mcp/anatomy-engine": "workspace:*",
+    "@motion-mcp/motion-runtime": "workspace:*",
     "three": "^0.169.0"
   },
   "devDependencies": {

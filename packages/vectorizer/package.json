@@ -17,8 +17,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@motion-mcp/capture": "*",
-    "@motion-mcp/scene-graph": "*"
+    "@motion-mcp/capture": "workspace:*",
+    "@motion-mcp/scene-graph": "workspace:*"
   },
   "repository": {
     "type": "git",
