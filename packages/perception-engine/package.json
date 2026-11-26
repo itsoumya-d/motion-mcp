@@ -17,10 +17,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@motion-mcp/anatomy-engine": "*",
-    "@motion-mcp/capture": "*",
-    "@motion-mcp/scene-graph": "*",
-    "@motion-mcp/vectorizer": "*"
+    "@motion-mcp/anatomy-engine": "workspace:*",
+    "@motion-mcp/capture": "workspace:*",
+    "@motion-mcp/scene-graph": "workspace:*",
+    "@motion-mcp/vectorizer": "workspace:*"
   },
   "repository": {
     "type": "git",

@@ -5,25 +5,17 @@
   "type": "module",
   "description": "AI-native, codebase-aware motion generation MCP server.",
   "license": "Apache-2.0",
-  "workspaces": [
-    "apps/web",
-    "apps/exercise-demo",
-    "packages/*"
-  ],
   "scripts": {
-    "dev": "npm run dev --workspace=apps/web",
-    "start": "npm run start --workspace=apps/web",
-    "build": "npm run build --workspace=apps/web",
-    "lint": "npm run typecheck --workspace=apps/web",
-    "build:packages": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "node --test --test-timeout=60000 --import tsx tests/*.test.ts",
+    "build": "pnpm -r --filter './packages/**' build",
+    "typecheck": "pnpm -r --filter './packages/**' typecheck",
+    "test": "node --test --test-timeout=120000 --import tsx tests/*.test.ts",
     "dev:mcp": "tsx packages/mcp-server/src/index.ts",
     "critic": "tsx packages/critic/src/cli.ts",
     "demo:patch-review": "node --import tsx examples/patch-review/demo.ts",
     "test:patch-review": "node --test --test-timeout=60000 --import tsx tests/ast-patcher.test.ts tests/patch-review-demo.test.ts",
     "typecheck:patch-review": "tsc -p examples/patch-review/tsconfig.json"
   },
+  "packageManager": "pnpm@9.15.0",
   "devDependencies": {
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",

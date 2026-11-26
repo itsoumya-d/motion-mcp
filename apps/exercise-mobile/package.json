@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@motion-mcp/motion-runtime": "*",
+    "@motion-mcp/motion-runtime": "workspace:*",
     "expo": "~53.0.0",
     "react": "19.0.0",
     "react-native": "0.79.2",
