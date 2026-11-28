@@ -34,6 +34,45 @@ Motion MCP expanded from 2D vector animations into full **text-to-3D skeletal an
 | **Binary `.glb` Container Support (`@motion-mcp/perception-engine`)** | `parseGlbContainer` extracts JSON chunks and binary buffer chunks directly from binary `.glb` files, eliminating previous JSON-only glTF constraints |
 | **3D Codebase & Asset Perception** | `codebase-scanner` detects Three.js, React Three Fiber, and Unreal projects; `asset-indexer` catalogs `.glb`, `.gltf`, `.fbx`, `.obj`, and `.bvh` files |
 | **3D Motion Quality Critic** | `critic` validates 3D quaternion unit normalization (`\|q\| = 1.0`) across all rotation keyframes to guard against mesh distortion |
+| **Component Accessibility & WCAG Auditor** | `critic` provides automated WCAG 2.2 Level AA compliance verification for UI component systems, computing relative luminance contrast ratios, interactive target sizes, and reduced-motion fallback safety |
+
+## Component Accessibility & WCAG Compliance Auditor
+
+The `@motion-mcp/critic` package includes automated verification for UI component systems to ensure components adhere to WCAG 2.2 Level AA accessibility standards:
+
+- **Relative Luminance & Color Contrast**: Calculates contrast ratios against WCAG 1.4.3 (4.5:1 normal text, 3.0:1 large text) with sRGB gamma correction.
+- **Interactive Target Size**: Audits clickable and touch boundaries against WCAG 2.5.8 (minimum 24x24 CSS pixels).
+- **Motion Restraint & Reduced-Motion Safety**: Enforces `prefers-reduced-motion` fallbacks on continuous loops (WCAG 2.3.3) and guards against flashing frequencies above 3 Hz (WCAG 2.3.1).
+
+### Usage
+
+```typescript
+import { auditComponentAccessibility, calculateContrastRatio } from "@motion-mcp/critic";
+
+const report = auditComponentAccessibility({
+  id: "collection-card-item",
+  role: "article",
+  label: "Archive Record",
+  contrast: {
+    foreground: "#1a1a1a",
+    background: "#ffffff",
+    isLargeText: false
+  },
+  targetSize: { width: 44, height: 44 },
+  motion: {
+    durationMs: 300,
+    hasReducedMotionFallback: true,
+    loop: false
+  }
+});
+
+console.log(report.ok); // true
+console.log(report.score); // 100
+```
+
+### Operational Limits
+- Audits declarative component specifications and token sets; does not mount headless browser DOM trees.
+- Sub-pixel anti-aliasing text variations are not simulated.
 
 ## Previous milestone — the verification-first milestone (Aug 2026)
 

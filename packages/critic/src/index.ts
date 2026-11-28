@@ -33,3 +33,15 @@ export { ClaudeVisionJudge, GeminiVisionJudge } from "./judge-live.js";
 export type { DecodedFrameInput, JudgeContext, JudgeProvider, JudgeVerdict } from "./judge.js";
 export { runRepairLoop } from "./repair-loop.js";
 export type { RepairAttempt, RepairLoopOptions, RepairLoopResult } from "./repair-loop.js";
+export {
+  auditComponentAccessibility,
+  calculateContrastRatio
+} from "./a11y-audit.js";
+export type {
+  AccessibilityReport,
+  AccessibilityViolation,
+  ComponentContrastSpec,
+  ComponentMotionSpec,
+  ComponentSpec,
+  ComponentTargetSizeSpec
+} from "./a11y-audit.js";
