@@ -292,3 +292,6 @@ async function readJson<T>(file: string): Promise<T | undefined> {
 function clamp(score: number): number {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
+
+export * from "./feature-lifecycle.js";
+
