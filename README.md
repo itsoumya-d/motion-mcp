@@ -662,6 +662,50 @@ Remaining:
 8. Pixel-level visual cross-runtime diffing (headless Lottie renderer; stop-parity already enforced by `verify_cross_runtime`)
 9. Pose-tracked rigging from video (BlazePose → bone hierarchy)
 
+## Feature Lifecycle Governance & Production Maintenance
+
+The `@motion-mcp/motion-planner` feature lifecycle engine governs motion capabilities from initial problem framing through specification, production release, and operational maintenance.
+
+### Capabilities
+- **Problem Framing**: Validates motion rationale, user problem context, target metrics, and reduced-motion accessibility fallbacks.
+- **Specification**: Enforces deterministic motion tokens, frame budgets, and platform targets (Flutter, React Native, Web).
+- **Production & Maintenance**: Tracks SLA conformance, p99 latency thresholds, and automated degradation alerts.
+
+### Runnable Example
+
+```typescript
+import { FeatureLifecycleManager } from "@motion-mcp/motion-planner";
+
+const manager = new FeatureLifecycleManager();
+
+manager.frameFeature({
+  featureId: "checkout-sheet",
+  title: "Checkout Confirmation Sheet",
+  problemStatement: "Users experience layout jumps during multi-step checkout",
+  targetMetric: "Completion rate +4.2%",
+  hasReducedMotionFallback: true
+});
+
+manager.specifyFeature("checkout-sheet", {
+  durationMs: 250,
+  easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+  targetPlatform: "flutter",
+  maxFrameBudgetMs: 16.67
+});
+
+manager.promoteToProduction("checkout-sheet");
+const audit = manager.auditMaintenance("checkout-sheet", {
+  activeSessions: 12000,
+  p99LatencyMs: 12.4,
+  errorRatePercent: 0.05
+});
+console.log(`Status: ${audit.status}, Action: ${audit.actionRequired}`);
+```
+
+### Limits
+- Lifecycle records are held in-memory per planner session.
+- Multi-region telemetry aggregation requires external sink integration.
+
 ---
 
 ## Contributing & Security
